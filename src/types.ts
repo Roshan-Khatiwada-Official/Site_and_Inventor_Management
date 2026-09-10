@@ -28,10 +28,19 @@ export interface UserAccount {
 
 export type SiteStatus = 'Available' | 'Assigned';
 
+export const SITE_CATEGORIES = [
+  'Butchery',
+  "Electronical Equipments repairmen's",
+  'Barber shop',
+  'Welding (CNC cutting, full object making process)',
+  'Construction marble layout / plumbing etc',
+] as const;
+
 export interface Site {
   id: string;
   code: string;               // auto-generated
   name: string;
+  category: string;           // one of SITE_CATEGORIES (or '')
   latitude: number;
   longitude: number;
   supervisor: string;

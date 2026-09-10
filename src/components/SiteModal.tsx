@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Building2 } from 'lucide-react';
-import { Site, UserAccount } from '../types';
+import { Site, UserAccount, SITE_CATEGORIES } from '../types';
 import { todayStr } from '../utils/storage';
 import { LocationInput } from './LocationInput';
 
@@ -19,6 +19,7 @@ function genCode(): string {
 export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser, onClose, onSave }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
   const [latitude, setLatitude] = useState<number>(0);
   const [longitude, setLongitude] = useState<number>(0);
   const [supervisor, setSupervisor] = useState('');
@@ -30,6 +31,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
     if (site) {
       setCode(site.code);
       setName(site.name);
+      setCategory(site.category || '');
       setLatitude(site.latitude);
       setLongitude(site.longitude);
       setSupervisor(site.supervisor);
@@ -39,6 +41,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
     } else {
       setCode(genCode());
       setName('');
+      setCategory('');
       setLatitude(0);
       setLongitude(0);
       setSupervisor('');
@@ -57,6 +60,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       id: site ? site.id : `site-${Date.now()}`,
       code: code.trim().toUpperCase() || genCode(),
       name: name.trim(),
+      category,
       latitude: Number(latitude) || 0,
       longitude: Number(longitude) || 0,
       supervisor: supervisor.trim(),
@@ -100,6 +104,14 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
               <label className="block font-semibold mb-1">Site Name *</label>
               <input required autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. North Delta Wetlands" className={field} />
             </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold mb-1">Site Type</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={`${field} bg-white`}>
+              <option value="">— select a type —</option>
+              {SITE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
 
           <LocationInput

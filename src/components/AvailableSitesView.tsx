@@ -59,6 +59,7 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
               <div>
                 <div className="font-bold text-slate-900 text-sm">{s.name}</div>
                 <div className="text-[11px] font-mono text-slate-400">{s.code}</div>
+                {s.category && <div className="text-[11px] text-blue-600 font-medium mt-0.5">{s.category}</div>}
               </div>
               <div className="text-xs text-slate-500 space-y-1">
                 {(s.latitude || s.longitude) ? (

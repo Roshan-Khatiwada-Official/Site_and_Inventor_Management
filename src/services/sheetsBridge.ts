@@ -53,6 +53,7 @@ function normalize(raw: any): AppData {
       id: String(s.id),
       code: s.code || '',
       name: s.name || '',
+      category: s.category || '',
       latitude: Number(s.latitude ?? s.coordinates?.lat) || 0,
       longitude: Number(s.longitude ?? s.coordinates?.lng) || 0,
       supervisor: s.supervisor || '',

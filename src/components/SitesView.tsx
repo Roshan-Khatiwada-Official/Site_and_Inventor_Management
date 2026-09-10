@@ -22,6 +22,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
     return (
       s.name.toLowerCase().includes(t) ||
       s.code.toLowerCase().includes(t) ||
+      s.category.toLowerCase().includes(t) ||
       s.supervisor.toLowerCase().includes(t) ||
       s.foundByName.toLowerCase().includes(t)
     );
@@ -59,6 +60,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
               <tr>
                 <th className="px-4 py-2.5 font-semibold">Code</th>
                 <th className="px-4 py-2.5 font-semibold">Name</th>
+                <th className="px-4 py-2.5 font-semibold">Type</th>
                 <th className="px-4 py-2.5 font-semibold">Location</th>
                 <th className="px-4 py-2.5 font-semibold">Supervisor</th>
                 <th className="px-4 py-2.5 font-semibold">Workers</th>
@@ -69,7 +71,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">No sites yet.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">No sites yet.</td></tr>
               )}
               {filtered.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50">
@@ -78,6 +80,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
                     {s.name}
                     {s.note && <div className="text-[11px] text-slate-400 font-normal truncate max-w-[220px]">{s.note}</div>}
                   </td>
+                  <td className="px-4 py-2.5 text-slate-600">{s.category || '—'}</td>
                   <td className="px-4 py-2.5">
                     {s.latitude || s.longitude ? (
                       <a
