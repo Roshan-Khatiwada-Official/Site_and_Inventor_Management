@@ -39,6 +39,7 @@ import { ReportsView } from './components/ReportsView';
 import { AvailableSitesView } from './components/AvailableSitesView';
 import { MyWorkView } from './components/MyWorkView';
 import { UsersView } from './components/UsersView';
+import { ProfileModal } from './components/ProfileModal';
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -60,12 +61,20 @@ export default function App() {
     return match && match.status !== 'Suspended' ? match : null;
   });
 
-  const [activeTab, setActiveTab] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>(() => loadStoredData('active_tab', ''));
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
   };
+
+  // Remember the open tab across refreshes; keep it valid for the current role.
+  useEffect(() => { if (activeTab) saveStoredData('active_tab', activeTab); }, [activeTab]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const valid = roleTabIds(currentUser.role);
+    if (!valid.includes(activeTab)) setActiveTab(valid[0]);
+  }, [currentUser, activeTab]);
 
   // ---- persistence to localStorage ----
   useEffect(() => { saveStoredData('sites', sites); }, [sites]);
@@ -81,6 +90,14 @@ export default function App() {
   const hydratingRef = useRef(false);
   const bridgeReadyRef = useRef(false);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushPendingRef = useRef(false);
+  const busyRef = useRef(false);            // a pull/push request is in flight
+  const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
+
+  const POLL_MS = 12000;
+
+  const snapshotOf = (d: { sites: any; inventory: any; assignments: any; requests: any; users: any }) =>
+    JSON.stringify([d.sites, d.inventory, d.assignments, d.requests, d.users]);
 
   const applySheetData = (d: AppData) => {
     hydratingRef.current = true;
@@ -92,13 +109,16 @@ export default function App() {
       setUsers(d.users);
       setCurrentUser(prev => (prev ? d.users.find(u => u.id === prev.id) || null : null));
     }
+    snapshotRef.current = snapshotOf(d);
     setTimeout(() => { hydratingRef.current = false; }, 0);
   };
 
+  // Initial load
   useEffect(() => {
     if (!bridgeConfig?.webAppUrl) { bridgeReadyRef.current = true; return; }
     let cancelled = false;
     setIsSyncing(true);
+    busyRef.current = true;
     bridgePull(bridgeConfig)
       .then(d => { if (!cancelled) applySheetData(d); })
       .catch(err => {
@@ -107,6 +127,7 @@ export default function App() {
       })
       .finally(() => {
         if (cancelled) return;
+        busyRef.current = false;
         setIsSyncing(false);
         setInitialSyncDone(true);
         bridgeReadyRef.current = true;
@@ -115,25 +136,66 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounced push on local change
   useEffect(() => {
     if (!bridgeConfig?.webAppUrl || bridgeConfig.autoSyncEnabled === false) return;
     if (!bridgeReadyRef.current || hydratingRef.current) return;
 
+    const current = snapshotOf({ sites, inventory, assignments, requests, users });
+    if (current === snapshotRef.current) return; // nothing actually changed
+
+    pushPendingRef.current = true;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(async () => {
       try {
         setIsSyncing(true);
+        busyRef.current = true;
         await bridgePush(bridgeConfig, { sites, inventory, assignments, requests, users });
+        snapshotRef.current = current;
       } catch (err) {
         console.error('Auto-sync failed:', err);
         showToast('Auto-sync to Google Sheet failed — will retry on next change.');
       } finally {
+        busyRef.current = false;
+        pushPendingRef.current = false;
         setIsSyncing(false);
       }
-    }, 1500);
+    }, 1200);
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites, inventory, assignments, requests, users]);
+
+  // Near-real-time: poll the sheet so changes from other people show up here.
+  useEffect(() => {
+    if (!bridgeConfig?.webAppUrl) return;
+
+    const poll = async () => {
+      if (document.hidden) return;
+      if (pushPendingRef.current || busyRef.current || hydratingRef.current) return;
+      try {
+        busyRef.current = true;
+        const d = await bridgePull(bridgeConfig);
+        if (pushPendingRef.current) return; // a local edit landed while fetching
+        const incoming = snapshotOf(d);
+        if (incoming !== snapshotRef.current) {
+          applySheetData(d);
+        }
+      } catch {
+        /* transient — try again next tick */
+      } finally {
+        busyRef.current = false;
+      }
+    };
+
+    const timer = window.setInterval(poll, POLL_MS);
+    const onVisible = () => { if (!document.hidden) poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridgeConfig]);
 
   const manualPull = async () => {
     if (!bridgeConfig?.webAppUrl) return;
@@ -149,19 +211,22 @@ export default function App() {
   };
 
   // ---- auth ----
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   const handleLogin = (u: UserAccount) => {
     setActiveSessionUserId(u.id);
     const stamped = { ...u, lastLogin: new Date().toISOString() };
     setCurrentUser(stamped);
     setUsers(prev => prev.map(x => (x.id === u.id ? stamped : x)));
-    setActiveTab(defaultTabFor(u.role));
+    const valid = roleTabIds(u.role);
+    if (!valid.includes(activeTab)) setActiveTab(valid[0]);
     showToast(`Signed in as ${u.name} (${u.role})`);
   };
 
   const handleLogout = () => {
     setActiveSessionUserId(null);
     setCurrentUser(null);
-    setActiveTab('');
+    setIsProfileOpen(false);
   };
 
   // ---- site handlers ----
@@ -358,6 +423,7 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onLogout={handleLogout}
+        onOpenProfile={() => setIsProfileOpen(true)}
         isSyncing={isSyncing}
         onManualPull={manualPull}
         pendingRequestCount={pendingRequestCount}
@@ -426,13 +492,21 @@ export default function App() {
         )}
       </main>
 
+      {isProfileOpen && (
+        <ProfileModal
+          user={currentUser}
+          onClose={() => setIsProfileOpen(false)}
+          onSave={(u: UserAccount) => { saveUser(u); setIsProfileOpen(false); }}
+        />
+      )}
+
       {toastEl}
     </div>
   );
 }
 
-function defaultTabFor(role: UserAccount['role']): string {
-  if (role === 'Admin') return 'sites';
-  if (role === 'Site Finder') return 'mysites';
-  return 'available';
+function roleTabIds(role: UserAccount['role']): string[] {
+  if (role === 'Admin') return ['sites', 'inventory', 'assignments', 'requests', 'reports', 'users'];
+  if (role === 'Site Finder') return ['mysites'];
+  return ['available', 'mywork'];
 }

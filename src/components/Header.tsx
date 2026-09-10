@@ -7,6 +7,7 @@ interface HeaderProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
+  onOpenProfile: () => void;
   isSyncing: boolean;
   onManualPull: () => void;
   pendingRequestCount: number;
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onTabChange,
   onLogout,
+  onOpenProfile,
   isSyncing,
   onManualPull,
   pendingRequestCount,
@@ -75,11 +77,21 @@ export const Header: React.FC<HeaderProps> = ({
               <DownloadCloud className="w-4 h-4" />
             </button>
             <button
-              onClick={onLogout}
-              className="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1.5 rounded-lg transition"
+              onClick={onOpenProfile}
+              title="My profile"
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 pl-1 pr-2.5 py-1 rounded-lg transition"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              Sign out
+              <span className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-[10px] font-bold text-white">
+                {currentUser.name.charAt(0).toUpperCase()}
+              </span>
+              <span className="text-xs font-medium hidden sm:inline max-w-[110px] truncate">{currentUser.name}</span>
+            </button>
+            <button
+              onClick={onLogout}
+              title="Sign out"
+              className="p-1.5 text-slate-400 hover:text-rose-300 hover:bg-slate-800 rounded-lg transition"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
