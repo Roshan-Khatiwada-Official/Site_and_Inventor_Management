@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, LocateFixed } from 'lucide-react';
+import { X, Building2, LocateFixed, MapPin } from 'lucide-react';
 import { Site, UserAccount } from '../types';
 import { todayStr } from '../utils/storage';
+import { MapPicker } from './MapPicker';
 
 interface SiteModalProps {
   isOpen: boolean;
@@ -131,17 +132,35 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block font-semibold">Location (Latitude / Longitude)</label>
+            <label className="block font-semibold mb-1">Location</label>
+            <p className="text-[11px] text-slate-500 mb-2 flex items-start gap-1">
+              <MapPin className="w-3.5 h-3.5 mt-px shrink-0 text-slate-400" />
+              <span>
+                <strong>On site?</strong> Tap “Use current location”. &nbsp;
+                <strong>Remote?</strong> Tap the map or drag the pin to where the site is.
+              </span>
+            </p>
+
+            <MapPicker
+              lat={latitude}
+              lng={longitude}
+              onChange={(la, lo) => { setLatitude(la); setLongitude(lo); setLocMsg(null); }}
+            />
+
+            <div className="flex items-center gap-2 mt-2">
               <button type="button" onClick={useCurrentLocation} disabled={locating}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-60">
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-60">
                 <LocateFixed className={`w-3.5 h-3.5 ${locating ? 'animate-pulse' : ''}`} />
-                {locating ? 'Getting…' : 'Use current location'}
+                {locating ? 'Getting location…' : 'Use current location'}
               </button>
+              <span className="text-[11px] font-mono text-slate-500">
+                {latitude || longitude ? `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}` : 'not set'}
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <input type="number" step="any" value={latitude} onChange={e => setLatitude(parseFloat(e.target.value))} placeholder="Latitude" className={`${field} font-mono`} />
-              <input type="number" step="any" value={longitude} onChange={e => setLongitude(parseFloat(e.target.value))} placeholder="Longitude" className={`${field} font-mono`} />
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <input type="number" step="any" value={latitude} onChange={e => setLatitude(parseFloat(e.target.value) || 0)} placeholder="Latitude" className={`${field} font-mono`} />
+              <input type="number" step="any" value={longitude} onChange={e => setLongitude(parseFloat(e.target.value) || 0)} placeholder="Longitude" className={`${field} font-mono`} />
             </div>
             {locMsg && <p className="mt-1 text-[11px] text-slate-500">{locMsg}</p>}
           </div>

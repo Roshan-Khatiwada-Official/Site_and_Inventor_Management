@@ -39,6 +39,7 @@ import { AvailableSitesView } from './components/AvailableSitesView';
 import { MyWorkView } from './components/MyWorkView';
 import { UsersView } from './components/UsersView';
 import { ProfileModal } from './components/ProfileModal';
+import { LoadingOverlay } from './components/LoadingOverlay';
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -85,6 +86,7 @@ export default function App() {
   // ---- Google Sheet sync ----
   const [bridgeConfig] = useState<BridgeConfig | null>(() => getStoredBridgeConfig());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [blockingLoad, setBlockingLoad] = useState<string | null>(null); // label while a big blocking load runs
   const [initialSyncDone, setInitialSyncDone] = useState(() => !getStoredBridgeConfig()?.webAppUrl);
   const hydratingRef = useRef(false);
   const bridgeReadyRef = useRef(false);
@@ -117,6 +119,7 @@ export default function App() {
     if (!bridgeConfig?.webAppUrl) { bridgeReadyRef.current = true; return; }
     let cancelled = false;
     setIsSyncing(true);
+    setBlockingLoad('Loading your data…');
     busyRef.current = true;
     bridgePull(bridgeConfig)
       .then(d => { if (!cancelled) applySheetData(d); })
@@ -128,6 +131,7 @@ export default function App() {
         if (cancelled) return;
         busyRef.current = false;
         setIsSyncing(false);
+        setBlockingLoad(null);
         setInitialSyncDone(true);
         bridgeReadyRef.current = true;
       });
@@ -199,13 +203,17 @@ export default function App() {
   const manualPull = async () => {
     if (!bridgeConfig?.webAppUrl) return;
     setIsSyncing(true);
+    setBlockingLoad('Refreshing from Google Sheet…');
+    busyRef.current = true;
     try {
       applySheetData(await bridgePull(bridgeConfig));
       showToast('Loaded latest data from Google Sheet.');
     } catch (err: any) {
       showToast(err?.message || 'Pull failed.');
     } finally {
+      busyRef.current = false;
       setIsSyncing(false);
+      setBlockingLoad(null);
     }
   };
 
@@ -396,12 +404,7 @@ export default function App() {
   );
 
   if (!currentUser && !initialSyncDone) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-4">
-        <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-emerald-400 animate-spin" />
-        <p className="text-sm text-slate-400">Loading data from Google Sheet…</p>
-      </div>
-    );
+    return <LoadingOverlay show label="Loading data from Google Sheet…" />;
   }
 
   if (!currentUser) {
@@ -477,6 +480,7 @@ export default function App() {
           <AvailableSitesView
             sites={availableSites}
             myRequests={myRequests}
+            assignments={assignments}
             onRequest={createRequest}
           />
         )}
@@ -499,6 +503,7 @@ export default function App() {
         />
       )}
 
+      <LoadingOverlay show={blockingLoad !== null} label={blockingLoad || undefined} />
       {toastEl}
     </div>
   );

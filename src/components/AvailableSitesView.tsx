@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
-import { MapPin, Send, Search, Building2 } from 'lucide-react';
-import { Site, SiteRequest } from '../types';
+import React, { useState, useMemo } from 'react';
+import { MapPin, Send, Search, Building2, Clock } from 'lucide-react';
+import { Site, SiteRequest, Assignment } from '../types';
 
 interface AvailableSitesViewProps {
   sites: Site[];
   myRequests: SiteRequest[];
+  assignments: Assignment[];
   onRequest: (siteId: string) => void;
 }
 
-export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, onRequest }) => {
+export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, onRequest }) => {
   const [q, setQ] = useState('');
+  const hoursBySite = useMemo(() => {
+    const m = new Map<string, number>();
+    assignments.forEach(a => m.set(a.siteId, (m.get(a.siteId) || 0) + (Number(a.hoursLogged) || 0)));
+    return m;
+  }, [assignments]);
   const statusFor = (siteId: string) => {
     const r = [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
     return r?.status;
@@ -57,6 +63,10 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
                 {s.supervisor && <div>Supervisor: {s.supervisor} {s.supervisorContact && `· ${s.supervisorContact}`}</div>}
                 <div>Workers: {s.workerCount}</div>
                 <div>Found by: {s.foundByName || '—'}</div>
+                <div className="inline-flex items-center gap-1 font-medium text-slate-700">
+                  <Clock className="w-3 h-3 text-blue-500" />
+                  {(hoursBySite.get(s.id) || 0).toFixed(1)}h of data collected here
+                </div>
                 {s.note && <div className="text-slate-400">{s.note}</div>}
               </div>
               <div className="mt-auto pt-2">
