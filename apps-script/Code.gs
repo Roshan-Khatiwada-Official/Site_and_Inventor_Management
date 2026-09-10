@@ -12,8 +12,8 @@
  *      (keeps the same Web app URL).
  */
 
-var SECRET_TOKEN = 'siteops-db-key-Kq93ZmXp7RtY2wLn';
-var RAW_SHEET = '_raw';
+var SECRET_TOKEN = 'siteops-db-2026-Kx9mPq3nRw7v';
+var RAW_SHEET = 'db';
 
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }

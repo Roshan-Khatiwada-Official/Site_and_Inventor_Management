@@ -18,12 +18,12 @@ No staff Google logins.
    `src/services/sheetsBridge.ts` → `DEFAULT_BRIDGE_CONFIG.webAppUrl`.
 
 Current deployment URL (in `src/services/sheetsBridge.ts`):
-`https://script.google.com/macros/s/AKfycby53NMy0jCyI_DVccA87xVOjAIYkDaX-uSQ0w6c_QPeXoBvXhIk4iJ69drzuG9Q2yiPug/exec`
+`https://script.google.com/macros/s/AKfycbwNibLBQSaRh29qRtpB4_o0q4cSk7Q6uVMJFWhRmdw53o-vXETVou9QcWu6dJMllLhtTQ/exec`
 
 ## Redeploying after a code change (e.g. new collections)
 
 The script is **collection-agnostic** — it stores the whole dataset in the hidden
-`_raw` tab and renders a readable tab for every array it finds. You still need to
+`db` tab and renders a readable tab for every array it finds. You still need to
 push a new version when `Code.gs` itself changes:
 
 1. Apps Script → paste the new `Code.gs`, **Save**.
@@ -38,4 +38,4 @@ push a new version when `Code.gs` itself changes:
   `SECRET_TOKEN`, redeploying (same deployment), and updating `sheetsBridge.ts`.
 - The `Users` tab contains login IDs and passwords in plain text. Restrict who can
   open the sheet.
-- Edit data through the app. The readable tabs are rebuilt from `_raw` on every save.
+- Edit data through the app. The readable tabs are rebuilt from `db` on every save.

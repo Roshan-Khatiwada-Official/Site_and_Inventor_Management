@@ -31,8 +31,8 @@ export interface AppData {
  */
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   webAppUrl:
-    'https://script.google.com/macros/s/AKfycby53NMy0jCyI_DVccA87xVOjAIYkDaX-uSQ0w6c_QPeXoBvXhIk4iJ69drzuG9Q2yiPug/exec',
-  token: 'siteops-db-key-Kq93ZmXp7RtY2wLn',
+    'https://script.google.com/macros/s/AKfycbwNibLBQSaRh29qRtpB4_o0q4cSk7Q6uVMJFWhRmdw53o-vXETVou9QcWu6dJMllLhtTQ/exec',
+  token: 'siteops-db-2026-Kx9mPq3nRw7v',
   autoSyncEnabled: true,
 };
 
