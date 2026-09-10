@@ -35,6 +35,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onSave
             <thead className="bg-slate-50 text-slate-500 text-left">
               <tr>
                 <th className="px-4 py-2.5 font-semibold">Name</th>
+                <th className="px-4 py-2.5 font-semibold">Contact</th>
                 <th className="px-4 py-2.5 font-semibold">Login ID</th>
                 <th className="px-4 py-2.5 font-semibold">Password</th>
                 <th className="px-4 py-2.5 font-semibold">Role</th>
@@ -45,7 +46,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onSave
             <tbody className="divide-y divide-slate-100">
               {users.map(u => (
                 <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{u.name}{u.id === currentUser.id && <span className="ml-1 text-[10px] text-blue-600">(you)</span>}</td>
+                  <td className="px-4 py-2.5 font-medium text-slate-900">
+                    {u.name}{u.id === currentUser.id && <span className="ml-1 text-[10px] text-blue-600">(you)</span>}
+                    {u.address && <div className="text-[11px] text-slate-400 font-normal truncate max-w-[200px]">{u.address}</div>}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-600">
+                    {u.phone || '—'}
+                    {u.email && <div className="text-[11px] text-slate-400">{u.email}</div>}
+                  </td>
                   <td className="px-4 py-2.5 font-mono text-slate-600">{u.loginId}</td>
                   <td className="px-4 py-2.5 font-mono text-slate-400">{u.password}</td>
                   <td className="px-4 py-2.5 text-slate-600">{u.role}</td>
@@ -86,11 +94,17 @@ const UserModal: React.FC<{
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('Data Collector');
   const [status, setStatus] = useState<'Active' | 'Suspended'>('Active');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (user) {
       setName(user.name); setLoginId(user.loginId); setPassword(user.password);
       setRole(user.role); setStatus(user.status);
+      setPhone(user.phone || ''); setEmail(user.email || '');
+      setAddress(user.address || ''); setNotes(user.notes || '');
     }
   }, [user]);
 
@@ -104,6 +118,10 @@ const UserModal: React.FC<{
       password: password.trim(),
       role,
       status,
+      phone: phone.trim(),
+      email: email.trim(),
+      address: address.trim(),
+      notes: notes.trim(),
       createdAt: user ? user.createdAt : todayStr(),
       lastLogin: user?.lastLogin,
     });
@@ -121,11 +139,8 @@ const UserModal: React.FC<{
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
-          <div>
-            <label className="block font-semibold mb-1">Full Name *</label>
-            <input required autoFocus value={name} onChange={e => setName(e.target.value)} className={field} />
-          </div>
+        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700 max-h-[75vh] overflow-y-auto">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Login</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Login ID *</label>
@@ -151,6 +166,31 @@ const UserModal: React.FC<{
               </select>
             </div>
           </div>
+
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 pt-1">Personal details</p>
+          <div>
+            <label className="block font-semibold mb-1">Full Name *</label>
+            <input required autoFocus value={name} onChange={e => setName(e.target.value)} className={field} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold mb-1">Contact Number</label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. +977-98XXXXXXXX" className={field} />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com" className={field} />
+            </div>
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">Address</label>
+            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, city, district" className={field} />
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">Notes</label>
+            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Other personal details / remarks" className={field} />
+          </div>
+
           <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">{user ? 'Save' : 'Create'}</button>

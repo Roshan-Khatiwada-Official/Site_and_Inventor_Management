@@ -13,6 +13,10 @@ export const INITIAL_USERS: UserAccount[] = [
     name: 'Sagar',
     role: 'Admin',
     status: 'Active',
+    phone: '',
+    email: '',
+    address: '',
+    notes: '',
     createdAt: '2026-09-10',
   },
 ];

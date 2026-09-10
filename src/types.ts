@@ -18,6 +18,10 @@ export interface UserAccount {
   name: string;
   role: UserRole;
   status: 'Active' | 'Suspended';
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
   createdAt: string;
   lastLogin?: string;
 }

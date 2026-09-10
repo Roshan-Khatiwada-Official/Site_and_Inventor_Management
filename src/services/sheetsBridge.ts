@@ -91,6 +91,10 @@ function normalize(raw: any): AppData {
       ...u,
       role: VALID_ROLES.includes(u.role) ? u.role : 'Data Collector',
       status: u.status === 'Suspended' ? 'Suspended' : 'Active',
+      phone: u.phone || '',
+      email: u.email || '',
+      address: u.address || '',
+      notes: u.notes || '',
     })),
   };
 }
