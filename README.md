@@ -38,12 +38,14 @@ Everyone signs in with an in-app **Login ID + password** (created by the Admin u
 
 **Admin**
 - **Sites** — every site, and which Site Finder added it. Add / edit / delete.
-- **Inventory** — simple item list (Item ID, Name, Category, Quantity, Note). Add / edit / delete. Items that are out show as *Out · <collector>*; a returned-with-a-problem item shows as *Flagged*.
-- **Returns** — items currently out with collectors. **Check in** opens a form ("is everything OK? camera, lens, cables, battery, body") — if not OK you add a note and the item is flagged in the inventory.
-- **Assignments** — assign a Data Collector to a Site and tick the inventory items they take. Only available (not out, not flagged) items are selectable. Shows hours logged.
-- **Requests** — data collectors' requests for available sites. **Approve** opens a picker to hand over inventory items, then creates the assignment; **Reject** dismisses it.
+- **Inventory** — simple item list (Item ID, Name, Category, Quantity, Note). Add / edit / delete. Items held by someone show *With \<collector\>*; a returned-with-a-problem item shows *Flagged*.
+- **Returns** — items currently held by collectors. **Check in** opens a form ("is everything OK? camera, lens, cables, battery, body") — if not OK you add a note and the item is flagged in the inventory and returned to stock.
+- **Assignments** — assign a Data Collector to a Site. The modal shows that collector's fixed equipment kit (read-only). Shows hours logged.
+- **Requests** — data collectors' requests for available sites. **Approve** creates the assignment; **Reject** dismisses it.
 - **Reports** — the numbers (see below).
-- **Logins** — create / edit / suspend / delete user logins and set their role.
+- **Logins** — create / edit / suspend / delete user logins and set their role. For a Data Collector there's an **Equipment** button to set the fixed kit they carry to every site.
+
+Equipment model: a Data Collector's kit is **fixed** — set it once under Logins, and they keep those items across every site and project. The items are only freed when an admin **checks them in** on the Returns tab (with the condition check).
 
 A data collector can only have **one open site at a time** — a pending request or an active assignment blocks new requests until that site is marked done.
 

@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, ShieldCheck } from 'lucide-react';
-import { UserAccount, UserRole } from '../types';
+import { Plus, Pencil, Trash2, X, ShieldCheck, Package } from 'lucide-react';
+import { UserAccount, UserRole, InventoryItem } from '../types';
 import { todayStr } from '../utils/storage';
 
 interface UsersViewProps {
   users: UserAccount[];
   currentUser: UserAccount;
+  inventory: InventoryItem[];
   onSave: (u: UserAccount) => void;
   onDelete: (id: string) => void;
+  onSetKit: (collectorId: string, itemIds: string[]) => void;
 }
 
 const ROLES: UserRole[] = ['Admin', 'Site Finder', 'Data Collector'];
 
-export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onSave, onDelete }) => {
+export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, inventory, onSave, onDelete, onSetKit }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UserAccount | null>(null);
+  const [kitFor, setKitFor] = useState<UserAccount | null>(null);
+
+  const kitCount = (id: string) => inventory.filter(i => i.heldById === id).length;
 
   return (
     <div className="space-y-4">
@@ -63,6 +68,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onSave
                     }`}>{u.status}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {u.role === 'Data Collector' && (
+                      <button onClick={() => setKitFor(u)}
+                        className="inline-flex items-center gap-1 text-blue-600 hover:underline mr-3">
+                        <Package className="w-3.5 h-3.5" /> Equipment ({kitCount(u.id)})
+                      </button>
+                    )}
                     <button onClick={() => { setEditing(u); setOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -80,6 +91,61 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onSave
       {open && (
         <UserModal user={editing} onClose={() => setOpen(false)} onSave={(u) => { onSave(u); setOpen(false); }} />
       )}
+      {kitFor && (
+        <KitModal
+          collector={kitFor}
+          inventory={inventory}
+          onClose={() => setKitFor(null)}
+          onSave={(ids) => { onSetKit(kitFor.id, ids); setKitFor(null); }}
+        />
+      )}
+    </div>
+  );
+};
+
+const KitModal: React.FC<{
+  collector: UserAccount;
+  inventory: InventoryItem[];
+  onClose: () => void;
+  onSave: (itemIds: string[]) => void;
+}> = ({ collector, inventory, onClose, onSave }) => {
+  const [picked, setPicked] = useState<string[]>(
+    inventory.filter(i => i.heldById === collector.id).map(i => i.id)
+  );
+  const toggle = (id: string) => setPicked(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
+
+  // Selectable: in stock, or already this collector's.
+  const options = inventory.filter(i => !i.heldById || i.heldById === collector.id);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl my-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><Package className="w-4 h-4" /></div>
+            <h3 className="font-bold text-slate-900 text-base">{collector.name}'s equipment</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4 text-xs text-slate-700">
+          <p className="text-slate-500">This is the fixed kit this collector carries to every site. Unchecking an item returns it to stock (no condition check — use the Returns tab for that).</p>
+          <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100">
+            {options.length === 0 && <p className="px-3 py-3 text-slate-400">No inventory items available.</p>}
+            {options.map(i => (
+              <label key={i.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" checked={picked.includes(i.id)} onChange={() => toggle(i.id)} />
+                <span className="font-mono text-slate-500">{i.itemId}</span>
+                <span className="text-slate-800">{i.name}</span>
+                {i.condition === 'Flagged' && <span className="text-[10px] text-rose-600">flagged</span>}
+              </label>
+            ))}
+          </div>
+          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
+            <button onClick={() => onSave(picked)} className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">Save kit ({picked.length})</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

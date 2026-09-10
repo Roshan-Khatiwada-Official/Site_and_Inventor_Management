@@ -255,13 +255,30 @@ export default function App() {
     showToast(`Saved item: ${draft.name}`);
   };
   const deleteInventoryItem = (id: string) => {
-    if (assignments.some(a => a.inventoryItemIds.includes(id))) {
-      showToast('That item is still out — check it in first (Returns tab).');
+    if (inventory.find(i => i.id === id)?.heldById) {
+      showToast('That item is held by a collector — check it in first (Returns tab).');
       return;
     }
     if (!window.confirm('Delete this inventory item?')) return;
     setInventory(prev => prev.filter(i => i.id !== id));
     showToast('Inventory item deleted.');
+  };
+
+  // Set exactly which items a data collector holds. Items they hold now but that
+  // are not in `itemIds` go back to stock; newly listed available items go to them.
+  const setCollectorKit = (collectorId: string, itemIds: string[]) => {
+    const collector = users.find(u => u.id === collectorId);
+    setInventory(prev => prev.map(i => {
+      const shouldHold = itemIds.includes(i.id);
+      if (shouldHold && i.heldById !== collectorId && !i.heldById) {
+        return { ...i, heldById: collectorId, heldByName: collector?.name || '' };
+      }
+      if (!shouldHold && i.heldById === collectorId) {
+        return { ...i, heldById: '', heldByName: '' };
+      }
+      return i;
+    }));
+    showToast(`Updated ${collector?.name || 'collector'}'s equipment.`);
   };
 
   // ---- assignment handlers ----
@@ -317,26 +334,28 @@ export default function App() {
     showToast('Assignment re-opened.');
   };
 
-  // Return one inventory item from an assignment, with a condition check.
-  const returnInventoryItem = (assignmentId: string, itemId: string, ok: boolean, note: string) => {
-    const item = inventory.find(i => i.id === itemId);
-    const record: ReturnRecord = {
-      itemId,
-      itemName: item?.name || itemId,
-      date: todayStr(),
-      ok,
-      note: ok ? '' : note.trim(),
-      byName: currentUser?.name || 'Admin',
-    };
-    setAssignments(prev => prev.map(a => (
-      a.id === assignmentId
-        ? { ...a, inventoryItemIds: a.inventoryItemIds.filter(x => x !== itemId), returnedItems: [...a.returnedItems, record] }
-        : a
-    )));
-    setInventory(prev => prev.map(i => (
-      i.id === itemId ? { ...i, condition: ok ? 'OK' : 'Flagged', conditionNote: ok ? '' : note.trim() } : i
-    )));
-    showToast(ok ? `Checked in "${record.itemName}".` : `Checked in "${record.itemName}" — flagged.`);
+  // Check an item back in from whoever holds it, with a condition check.
+  const returnInventoryItem = (itemId: string, ok: boolean, note: string) => {
+    setInventory(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      const record: ReturnRecord = {
+        date: todayStr(),
+        ok,
+        note: ok ? '' : note.trim(),
+        byName: currentUser?.name || 'Admin',
+        fromCollectorName: i.heldByName || '',
+      };
+      return {
+        ...i,
+        heldById: '',
+        heldByName: '',
+        condition: ok ? 'OK' : 'Flagged',
+        conditionNote: ok ? '' : note.trim(),
+        returnLog: [record, ...i.returnLog].slice(0, 50),
+      };
+    }));
+    const nm = inventory.find(i => i.id === itemId)?.name || 'item';
+    showToast(ok ? `Checked in "${nm}".` : `Checked in "${nm}" — flagged.`);
   };
 
   const clearItemFlag = (itemId: string) => {
@@ -370,7 +389,7 @@ export default function App() {
     showToast(`Requested "${site.name}".`);
   };
 
-  const decideRequest = (requestId: string, approve: boolean, itemIds: string[] = []) => {
+  const decideRequest = (requestId: string, approve: boolean) => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
     setRequests(prev => prev.map(r => (r.id === requestId
@@ -385,13 +404,11 @@ export default function App() {
           siteName: req.siteName,
           collectorId: req.collectorId,
           collectorName: req.collectorName,
-          inventoryItemIds: itemIds,
           assignedById: currentUser?.id || '',
           assignedByName: currentUser?.name || '',
           status: 'Active',
           hoursLogged: 0,
           sessions: [],
-          returnedItems: [],
           createdAt: todayStr(),
         });
       } else {
@@ -409,6 +426,10 @@ export default function App() {
   };
   const deleteUser = (id: string) => {
     if (id === currentUser?.id) { showToast("You can't delete your own account."); return; }
+    if (inventory.some(i => i.heldById === id)) {
+      showToast('Check in this collector’s equipment first (Returns tab).');
+      return;
+    }
     if (!window.confirm('Delete this login?')) return;
     setUsers(prev => prev.filter(u => u.id !== id));
     showToast('Login deleted.');
@@ -431,19 +452,12 @@ export default function App() {
   const dataCollectors = useMemo(() => users.filter(u => u.role === 'Data Collector' && u.status === 'Active'), [users]);
   const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
 
-  // Which inventory items are still out (in any assignment's item list, whatever its
-  // status) — an item is only "available" again once the admin checks it in.
-  const itemsOut = useMemo(() => {
-    const m = new Map<string, { collectorName: string; siteName: string; assignmentId: string }>();
-    assignments.forEach(a => {
-      a.inventoryItemIds.forEach(id =>
-        m.set(id, { collectorName: a.collectorName, siteName: a.siteName, assignmentId: a.id })
-      );
-    });
-    return m;
-  }, [assignments]);
-
-  const outCount = itemsOut.size;
+  // Items currently held by a collector (fixed kit, kept across all their sites).
+  const itemsOutCount = useMemo(() => inventory.filter(i => i.heldById).length, [inventory]);
+  const myKit = useMemo(
+    () => (currentUser ? inventory.filter(i => i.heldById === currentUser.id) : []),
+    [inventory, currentUser]
+  );
   const myOpenWork = currentUser ? collectorHasOpenWork(currentUser.id) : false;
 
   // ---- render gates ----
@@ -480,7 +494,7 @@ export default function App() {
         isSyncing={isSyncing}
         onManualPull={manualPull}
         pendingRequestCount={pendingRequestCount}
-        outCount={outCount}
+        outCount={itemsOutCount}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
@@ -497,34 +511,39 @@ export default function App() {
         {role === 'Admin' && activeTab === 'inventory' && (
           <InventoryView
             inventory={inventory}
-            itemsOut={itemsOut}
             onSave={saveInventoryItem}
             onDelete={deleteInventoryItem}
             onClearFlag={clearItemFlag}
           />
         )}
         {role === 'Admin' && activeTab === 'returns' && (
-          <ReturnsView assignments={assignments} inventory={inventory} onReturn={returnInventoryItem} />
+          <ReturnsView inventory={inventory} onReturn={returnInventoryItem} />
         )}
         {role === 'Admin' && activeTab === 'assignments' && (
           <AssignmentsView
             assignments={assignments}
             sites={sites}
             inventory={inventory}
-            itemsOut={itemsOut}
             dataCollectors={dataCollectors}
             onSave={saveAssignment}
             onDelete={deleteAssignment}
           />
         )}
         {role === 'Admin' && activeTab === 'requests' && (
-          <RequestsView requests={requests} inventory={inventory} itemsOut={itemsOut} onDecide={decideRequest} />
+          <RequestsView requests={requests} onDecide={decideRequest} />
         )}
         {role === 'Admin' && activeTab === 'reports' && (
           <ReportsView sites={sites} assignments={assignments} users={users} />
         )}
         {role === 'Admin' && activeTab === 'users' && (
-          <UsersView users={users} currentUser={currentUser} onSave={saveUser} onDelete={deleteUser} />
+          <UsersView
+            users={users}
+            currentUser={currentUser}
+            inventory={inventory}
+            onSave={saveUser}
+            onDelete={deleteUser}
+            onSetKit={setCollectorKit}
+          />
         )}
 
         {role === 'Site Finder' && (
@@ -551,7 +570,7 @@ export default function App() {
           <MyWorkView
             assignments={myAssignments}
             sites={sites}
-            inventory={inventory}
+            myKit={myKit}
             onFinish={finishAssignment}
             onReopen={reopenAssignment}
           />

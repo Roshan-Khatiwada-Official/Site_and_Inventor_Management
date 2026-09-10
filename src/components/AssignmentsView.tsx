@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, ClipboardList, Clock } from 'lucide-react';
+import { Plus, Trash2, X, ClipboardList, Clock, Package } from 'lucide-react';
 import { Assignment, Site, InventoryItem, UserAccount } from '../types';
 import { todayStr } from '../utils/storage';
 
@@ -7,26 +7,25 @@ interface AssignmentsViewProps {
   assignments: Assignment[];
   sites: Site[];
   inventory: InventoryItem[];
-  itemsOut: Map<string, { collectorName: string; siteName: string; assignmentId: string }>;
   dataCollectors: UserAccount[];
   onSave: (a: Assignment) => void;
   onDelete: (id: string) => void;
 }
 
 export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
-  assignments, sites, inventory, itemsOut, dataCollectors, onSave, onDelete,
+  assignments, sites, inventory, dataCollectors, onSave, onDelete,
 }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
 
-  const itemName = (id: string) => inventory.find(i => i.id === id)?.name || id;
+  const kitOf = (collectorId: string) => inventory.filter(i => i.heldById === collectorId);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Assignments</h2>
-          <p className="text-xs text-slate-500">Assign a data collector to a site and hand them inventory items.</p>
+          <p className="text-xs text-slate-500">Assign a data collector to a site. Their equipment kit stays the same across every site — set it under <strong>Logins</strong>.</p>
         </div>
         <button onClick={() => { setEditing(null); setOpen(true); }}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm">
@@ -41,7 +40,7 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
               <tr>
                 <th className="px-4 py-2.5 font-semibold">Data Collector</th>
                 <th className="px-4 py-2.5 font-semibold">Site</th>
-                <th className="px-4 py-2.5 font-semibold">Inventory items</th>
+                <th className="px-4 py-2.5 font-semibold">Equipment kit</th>
                 <th className="px-4 py-2.5 font-semibold">Hours logged</th>
                 <th className="px-4 py-2.5 font-semibold">Status</th>
                 <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
@@ -51,37 +50,40 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
               {assignments.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No assignments yet.</td></tr>
               )}
-              {assignments.map(a => (
-                <tr key={a.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{a.collectorName}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{a.siteName}</td>
-                  <td className="px-4 py-2.5 text-slate-600">
-                    {a.inventoryItemIds.length === 0 ? '—' : (
-                      <div className="flex flex-wrap gap-1">
-                        {a.inventoryItemIds.map(id => (
-                          <span key={id} className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px]">{itemName(id)}</span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                      <Clock className="w-3 h-3 text-blue-500" />{a.hoursLogged.toFixed(1)}h
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                      a.status === 'Active' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    }`}>{a.status}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button onClick={() => { setEditing(a); setOpen(true); }} className="text-blue-600 hover:underline mr-3">Edit items</button>
-                    <button onClick={() => onDelete(a.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {assignments.map(a => {
+                const kit = kitOf(a.collectorId);
+                return (
+                  <tr key={a.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-900">{a.collectorName}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{a.siteName}</td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {kit.length === 0 ? '—' : (
+                        <div className="flex flex-wrap gap-1">
+                          {kit.map(i => (
+                            <span key={i.id} className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px]">{i.name}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
+                        <Clock className="w-3 h-3 text-blue-500" />{a.hoursLogged.toFixed(1)}h
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                        a.status === 'Active' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>{a.status}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                      <button onClick={() => { setEditing(a); setOpen(true); }} className="text-blue-600 hover:underline mr-3">Edit</button>
+                      <button onClick={() => onDelete(a.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -91,9 +93,8 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         <AssignmentModal
           assignment={editing}
           sites={sites}
-          inventory={inventory}
-          itemsOut={itemsOut}
           dataCollectors={dataCollectors}
+          kitOf={kitOf}
           onClose={() => setOpen(false)}
           onSave={(a) => { onSave(a); setOpen(false); }}
         />
@@ -105,34 +106,17 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 const AssignmentModal: React.FC<{
   assignment: Assignment | null;
   sites: Site[];
-  inventory: InventoryItem[];
-  itemsOut: Map<string, { collectorName: string; siteName: string; assignmentId: string }>;
   dataCollectors: UserAccount[];
+  kitOf: (collectorId: string) => InventoryItem[];
   onClose: () => void;
   onSave: (a: Assignment) => void;
-}> = ({ assignment, sites, inventory, itemsOut, dataCollectors, onClose, onSave }) => {
+}> = ({ assignment, sites, dataCollectors, kitOf, onClose, onSave }) => {
   const [collectorId, setCollectorId] = useState('');
   const [siteId, setSiteId] = useState('');
-  const [itemIds, setItemIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (assignment) {
-      setCollectorId(assignment.collectorId);
-      setSiteId(assignment.siteId);
-      setItemIds(assignment.inventoryItemIds);
-    }
+    if (assignment) { setCollectorId(assignment.collectorId); setSiteId(assignment.siteId); }
   }, [assignment]);
-
-  const toggleItem = (id: string) =>
-    setItemIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-
-  // Items that can be handed out now: not flagged, and not already out with someone else.
-  const selectableItems = inventory.filter(i => {
-    if (i.condition === 'Flagged') return false;
-    const out = itemsOut.get(i.id);
-    if (out && out.assignmentId !== assignment?.id) return false;
-    return true;
-  });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,18 +129,17 @@ const AssignmentModal: React.FC<{
       siteName: site?.name || '',
       collectorId,
       collectorName: collector?.name || '',
-      inventoryItemIds: itemIds,
       assignedById: assignment?.assignedById || '',
       assignedByName: assignment?.assignedByName || '',
       status: assignment?.status || 'Active',
       hoursLogged: assignment?.hoursLogged || 0,
       sessions: assignment?.sessions || [],
-      returnedItems: assignment?.returnedItems || [],
       createdAt: assignment?.createdAt || todayStr(),
     });
   };
 
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none';
+  const kit = collectorId ? kitOf(collectorId) : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -187,20 +170,22 @@ const AssignmentModal: React.FC<{
             </select>
           </div>
 
-          <div>
-            <label className="block font-semibold mb-1.5">Inventory items ({itemIds.length} selected)</label>
-            <div className="border border-slate-200 rounded-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
-              {selectableItems.length === 0 && <p className="px-3 py-3 text-slate-400">No inventory items available.</p>}
-              {selectableItems.map(i => (
-                <label key={i.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
-                  <input type="checkbox" checked={itemIds.includes(i.id)} onChange={() => toggleItem(i.id)} />
-                  <span className="font-mono text-slate-500">{i.itemId}</span>
-                  <span className="text-slate-800">{i.name}</span>
-                </label>
-              ))}
+          {collectorId && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+              <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Their equipment kit (set under Logins)</div>
+              {kit.length === 0 ? (
+                <p className="text-slate-400">No equipment assigned to this collector yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {kit.map(i => (
+                    <span key={i.id} className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-600">
+                      <Package className="w-3 h-3" /> {i.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="mt-1 text-[11px] text-slate-400">Items already out or flagged are hidden.</p>
-          </div>
+          )}
 
           <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>

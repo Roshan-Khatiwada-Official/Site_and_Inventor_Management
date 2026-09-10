@@ -44,6 +44,14 @@ export interface Site {
   createdAt: string;
 }
 
+export interface ReturnRecord {
+  date: string;
+  ok: boolean;                // everything in good condition?
+  note: string;               // problem description if not ok
+  byName: string;             // admin who processed the return
+  fromCollectorName: string;  // collector the item came back from
+}
+
 export interface InventoryItem {
   id: string;
   itemId: string;             // human-readable code (required)
@@ -53,16 +61,10 @@ export interface InventoryItem {
   note: string;               // optional
   condition: 'OK' | 'Flagged'; // set to Flagged on a problem return
   conditionNote: string;      // what's wrong, if flagged
+  heldById: string;           // Data Collector currently holding it ('' = in stock)
+  heldByName: string;         // denormalised
+  returnLog: ReturnRecord[];  // check-in history
   createdAt: string;
-}
-
-export interface ReturnRecord {
-  itemId: string;
-  itemName: string;
-  date: string;
-  ok: boolean;                // everything in good condition?
-  note: string;               // problem description if not ok
-  byName: string;             // admin who processed the return
 }
 
 export interface CollectionSession {
@@ -79,13 +81,11 @@ export interface Assignment {
   siteName: string;           // denormalised
   collectorId: string;        // Data Collector user id
   collectorName: string;      // denormalised
-  inventoryItemIds: string[]; // one assignment can carry several items
   assignedById: string;       // Admin user id
   assignedByName: string;
   status: AssignmentStatus;
   hoursLogged: number;        // sum of session hours
   sessions: CollectionSession[];
-  returnedItems: ReturnRecord[]; // items handed back and checked in
   createdAt: string;
 }
 

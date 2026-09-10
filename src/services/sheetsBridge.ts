@@ -1,4 +1,4 @@
-import { Site, InventoryItem, Assignment, SiteRequest, UserAccount } from '../types';
+import { Site, InventoryItem, Assignment, SiteRequest, UserAccount, ReturnRecord } from '../types';
 
 /**
  * Client for the Google Apps Script "database bridge" (see /apps-script/Code.gs).
@@ -73,15 +73,23 @@ function normalize(raw: any): AppData {
       note: i.note || '',
       condition: i.condition === 'Flagged' ? 'Flagged' : 'OK',
       conditionNote: i.conditionNote || '',
+      heldById: i.heldById || '',
+      heldByName: i.heldByName || '',
+      returnLog: arr<ReturnRecord>(i.returnLog),
       createdAt: i.createdAt || '',
     })),
-    assignments: arr<any>(d.assignments).map((a: any) => ({
-      ...a,
-      inventoryItemIds: arr<string>(a.inventoryItemIds),
-      sessions: arr<any>(a.sessions),
-      returnedItems: arr<any>(a.returnedItems),
-      hoursLogged: Number(a.hoursLogged) || 0,
+    assignments: arr<any>(d.assignments).map((a: any): Assignment => ({
+      id: a.id,
+      siteId: a.siteId || '',
+      siteName: a.siteName || '',
+      collectorId: a.collectorId || '',
+      collectorName: a.collectorName || '',
+      assignedById: a.assignedById || '',
+      assignedByName: a.assignedByName || '',
       status: a.status === 'Completed' ? 'Completed' : 'Active',
+      hoursLogged: Number(a.hoursLogged) || 0,
+      sessions: arr<any>(a.sessions),
+      createdAt: a.createdAt || '',
     })),
     requests: arr<SiteRequest>(d.requests),
     users: arr<any>(d.users).map((u: any): UserAccount => ({

@@ -1,22 +1,40 @@
 import React, { useState } from 'react';
-import { Clock, MapPin, Package, CheckCircle2, Briefcase, AlertTriangle } from 'lucide-react';
+import { Clock, MapPin, Package, CheckCircle2, Briefcase } from 'lucide-react';
 import { Assignment, Site, InventoryItem, CollectionSession } from '../types';
 import { todayStr } from '../utils/storage';
 
 interface MyWorkViewProps {
   assignments: Assignment[];
   sites: Site[];
-  inventory: InventoryItem[];
+  myKit: InventoryItem[];
   onFinish: (assignmentId: string, session: CollectionSession | null) => void;
   onReopen: (assignmentId: string) => void;
 }
 
-export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inventory, onFinish, onReopen }) => {
+export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKit, onFinish, onReopen }) => {
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold text-slate-900">My Work</h2>
         <p className="text-xs text-slate-500">Enter the hours of data you collected, then finish the site.</p>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+          <Package className="w-3.5 h-3.5 text-slate-400" /> My equipment
+        </div>
+        {myKit.length === 0 ? (
+          <p className="text-xs text-slate-400">No equipment assigned to you yet — ask the admin.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {myKit.map(i => (
+              <span key={i.id} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-600">
+                <Package className="w-3 h-3" /> {i.name} <span className="font-mono text-slate-400">· {i.itemId}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-slate-400 mt-2">You use this same kit at every site. Return it to the admin only when you're done for good.</p>
       </div>
 
       {assignments.length === 0 && (
@@ -31,7 +49,6 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inve
             key={a.id}
             a={a}
             site={sites.find(s => s.id === a.siteId)}
-            inventory={inventory}
             onFinish={onFinish}
             onReopen={onReopen}
           />
@@ -44,15 +61,12 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inve
 const AssignmentCard: React.FC<{
   a: Assignment;
   site?: Site;
-  inventory: InventoryItem[];
   onFinish: (id: string, s: CollectionSession | null) => void;
   onReopen: (id: string) => void;
-}> = ({ a, site, inventory, onFinish, onReopen }) => {
+}> = ({ a, site, onFinish, onReopen }) => {
   const [hours, setHours] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(todayStr());
-
-  const items = a.inventoryItemIds.map(id => inventory.find(i => i.id === id)).filter(Boolean) as InventoryItem[];
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,16 +101,6 @@ const AssignmentCard: React.FC<{
           </div>
         </div>
       </div>
-
-      {items.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {items.map(i => (
-            <span key={i.id} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-600">
-              <Package className="w-3 h-3" /> {i.name}
-            </span>
-          ))}
-        </div>
-      )}
 
       {a.sessions.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 space-y-0.5">
@@ -133,17 +137,9 @@ const AssignmentCard: React.FC<{
           </button>
         </form>
       ) : (
-        <div className="mt-3 border-t border-slate-100 pt-3 text-xs space-y-2">
-          {items.length > 0 && (
-            <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
-              <span>Return your equipment ({items.map(i => i.name).join(', ')}) to the admin so it can be checked in.</span>
-            </div>
-          )}
-          <button onClick={() => onReopen(a.id)} className="text-slate-500 hover:text-slate-800 underline">
-            Re-open this site (add more hours)
-          </button>
-        </div>
+        <button onClick={() => onReopen(a.id)} className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500 hover:text-slate-800 underline block">
+          Re-open this site (add more hours)
+        </button>
       )}
     </div>
   );

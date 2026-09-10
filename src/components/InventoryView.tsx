@@ -3,17 +3,14 @@ import { Plus, Pencil, Trash2, X, Package, Search, AlertTriangle } from 'lucide-
 import { InventoryItem } from '../types';
 import { todayStr } from '../utils/storage';
 
-interface OutInfo { collectorName: string; siteName: string; assignmentId: string }
-
 interface InventoryViewProps {
   inventory: InventoryItem[];
-  itemsOut: Map<string, OutInfo>;
   onSave: (item: InventoryItem) => void;
   onDelete: (id: string) => void;
   onClearFlag: (id: string) => void;
 }
 
-export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, itemsOut, onSave, onDelete, onClearFlag }) => {
+export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, onSave, onDelete, onClearFlag }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [q, setQ] = useState('');
@@ -60,7 +57,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, itemsOu
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No inventory items yet.</td></tr>
               )}
               {filtered.map(i => {
-                const out = itemsOut.get(i.id);
+                const held = !!i.heldById;
                 return (
                   <tr key={i.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5 font-mono text-slate-500">{i.itemId}</td>
@@ -76,26 +73,26 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, itemsOu
                     <td className="px-4 py-2.5 text-slate-600">{i.category || '—'}</td>
                     <td className="px-4 py-2.5 text-slate-600">{i.quantity || 0}</td>
                     <td className="px-4 py-2.5">
-                      {out ? (
+                      {held ? (
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                          Out · {out.collectorName}
+                          With {i.heldByName}
                         </span>
                       ) : i.condition === 'Flagged' ? (
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">Flagged</span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Available</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">In stock</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      {i.condition === 'Flagged' && !out && (
+                      {i.condition === 'Flagged' && !held && (
                         <button onClick={() => onClearFlag(i.id)} className="text-emerald-600 hover:underline mr-3">Clear flag</button>
                       )}
                       <button onClick={() => { setEditing(i); setOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => onDelete(i.id)} disabled={!!out}
+                      <button onClick={() => onDelete(i.id)} disabled={held}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded disabled:opacity-30"
-                        title={out ? 'Item is currently out' : 'Delete'}>
+                        title={held ? 'Item is with a collector' : 'Delete'}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -148,6 +145,9 @@ const InventoryModal: React.FC<{
       note: note.trim(),
       condition: item ? item.condition : 'OK',
       conditionNote: item ? item.conditionNote : '',
+      heldById: item ? item.heldById : '',
+      heldByName: item ? item.heldByName : '',
+      returnLog: item ? item.returnLog : [],
       createdAt: item ? item.createdAt : todayStr(),
     });
   };
