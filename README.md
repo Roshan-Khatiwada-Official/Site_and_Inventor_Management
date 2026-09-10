@@ -1,14 +1,6 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Site &amp; Inventory Manager
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/158fbd3c-b710-4984-993a-7406d7405700
-
-## Run Locally
+## Run locally
 
 **Prerequisites:**  Node.js
 
@@ -24,7 +16,7 @@ Live (GitHub Pages): **https://roshan-khatiwada-official.github.io/Site_and_Inve
 
 ---
 
-# Site & Inventory Manager
+## What it is
 
 A small field-operations app. **Site Finders** add field sites, **Data Collectors**
 request sites and log how many hours of data they collect, and the **Admin** manages

@@ -1,6 +1,6 @@
 {
   "name": "Site & Inventory Manager",
-  "description": "Comprehensive platform for site arrangements, data collector daily assignments, and equipment inventory tracking across field sites with real-time Google Sheets database sync.",
+  "description": "Three-role field-operations app (Admin, Site Finder, Data Collector) for managing field sites, inventory, assignments and data-collection hours, backed by a shared Google Sheet.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
