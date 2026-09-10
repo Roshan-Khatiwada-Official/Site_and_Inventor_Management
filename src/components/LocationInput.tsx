@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LocateFixed, Link2, Search, MapPin } from 'lucide-react';
+import { LocateFixed, Link2, MapPin } from 'lucide-react';
 import { MapPicker } from './MapPicker';
 
 interface LocationInputProps {
@@ -30,10 +30,8 @@ function parseLatLng(text: string): { lat: number; lng: number } | null {
 
 export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange }) => {
   const [urlText, setUrlText] = useState('');
-  const [query, setQuery] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'' | 'gps' | 'search'>('');
-  const [results, setResults] = useState<{ label: string; lat: number; lng: number }[]>([]);
+  const [gps, setGps] = useState(false);
 
   const set = (la: number, lo: number, note: string) => {
     onChange(Number(la.toFixed(6)), Number(lo.toFixed(6)));
@@ -42,11 +40,11 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
 
   const useGps = () => {
     if (!('geolocation' in navigator)) { setMsg('This device does not support location.'); return; }
-    setBusy('gps'); setMsg(null);
+    setGps(true); setMsg(null);
     navigator.geolocation.getCurrentPosition(
-      pos => { set(pos.coords.latitude, pos.coords.longitude, 'Set to your current location.'); setBusy(''); },
+      pos => { set(pos.coords.latitude, pos.coords.longitude, 'Set to your current location.'); setGps(false); },
       err => {
-        setBusy('');
+        setGps(false);
         setMsg(err.code === err.PERMISSION_DENIED
           ? 'Location permission denied. Allow it in your browser and try again.'
           : 'Could not read your location. Try again outdoors.');
@@ -61,25 +59,6 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
     else setMsg('Could not read coordinates. Paste the full Google Maps URL (open a short link first, then copy from the address bar), or type "latitude, longitude".');
   };
 
-  const runSearch = async () => {
-    const q = query.trim();
-    if (!q) return;
-    setBusy('search'); setMsg(null); setResults([]);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`,
-        { headers: { Accept: 'application/json' } }
-      );
-      const rows = await res.json();
-      if (!Array.isArray(rows) || rows.length === 0) { setMsg('No places found for that search.'); return; }
-      setResults(rows.map((r: any) => ({ label: r.display_name, lat: parseFloat(r.lat), lng: parseFloat(r.lon) })));
-    } catch {
-      setMsg('Search failed (no internet, or the map service is busy). Try again.');
-    } finally {
-      setBusy('');
-    }
-  };
-
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none';
 
   return (
@@ -87,10 +66,10 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
       <label className="block font-semibold text-slate-700">Location</label>
 
       {/* on site */}
-      <button type="button" onClick={useGps} disabled={busy === 'gps'}
+      <button type="button" onClick={useGps} disabled={gps}
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-60">
-        <LocateFixed className={`w-3.5 h-3.5 ${busy === 'gps' ? 'animate-pulse' : ''}`} />
-        {busy === 'gps' ? 'Getting location…' : 'On site — use my current location'}
+        <LocateFixed className={`w-3.5 h-3.5 ${gps ? 'animate-pulse' : ''}`} />
+        {gps ? 'Getting location…' : 'On site — use my current location'}
       </button>
 
       {/* paste link */}
@@ -100,31 +79,6 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
           <input value={urlText} onChange={e => setUrlText(e.target.value)} placeholder="https://www.google.com/maps/@27.71,85.32,15z  or  27.71, 85.32" className={field} />
           <button type="button" onClick={applyUrl} className="px-3 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white rounded-lg shrink-0">Use</button>
         </div>
-      </div>
-
-      {/* search */}
-      <div>
-        <div className="text-[11px] text-slate-500 mb-1 flex items-center gap-1"><Search className="w-3 h-3" /> Or search a place name</div>
-        <div className="flex gap-2">
-          <input value={query} onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
-            placeholder="e.g. Bhaktapur Durbar Square" className={field} />
-          <button type="button" onClick={runSearch} disabled={busy === 'search'}
-            className="px-3 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white rounded-lg shrink-0 disabled:opacity-60">
-            {busy === 'search' ? '…' : 'Search'}
-          </button>
-        </div>
-        {results.length > 0 && (
-          <div className="mt-1 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-40 overflow-y-auto">
-            {results.map((r, i) => (
-              <button type="button" key={i}
-                onClick={() => { set(r.lat, r.lng, 'Location set from search.'); setResults([]); setQuery(''); }}
-                className="w-full text-left px-3 py-2 text-[11px] text-slate-700 hover:bg-slate-50">
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* manual + preview */}

@@ -45,3 +45,10 @@ export function formatDateString(date: Date): string {
 export function todayStr(): string {
   return formatDateString(new Date());
 }
+
+/** Sort comparator: most recently added / changed first. */
+export function byNewest(a: { updatedAt?: string; createdAt?: string }, b: { updatedAt?: string; createdAt?: string }): number {
+  const ka = a.updatedAt || a.createdAt || '';
+  const kb = b.updatedAt || b.createdAt || '';
+  return kb.localeCompare(ka);
+}

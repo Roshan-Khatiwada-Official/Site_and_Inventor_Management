@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { X, PackageCheck, Undo2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { InventoryItem } from '../types';
+import { byNewest } from '../utils/storage';
 
 interface ReturnsViewProps {
   inventory: InventoryItem[];
@@ -10,7 +11,7 @@ interface ReturnsViewProps {
 export const ReturnsView: React.FC<ReturnsViewProps> = ({ inventory, onReturn }) => {
   const [target, setTarget] = useState<InventoryItem | null>(null);
 
-  const held = useMemo(() => inventory.filter(i => i.heldById), [inventory]);
+  const held = useMemo(() => [...inventory.filter(i => i.heldById)].sort(byNewest), [inventory]);
 
   const recent = useMemo(() => {
     const list: { itemName: string; ok: boolean; note: string; date: string; from: string }[] = [];

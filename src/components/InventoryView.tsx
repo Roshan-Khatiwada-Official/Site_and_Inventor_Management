@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, Package, Search, AlertTriangle } from 'lucide-react';
 import { InventoryItem } from '../types';
-import { todayStr } from '../utils/storage';
+import { todayStr, byNewest } from '../utils/storage';
 
 interface InventoryViewProps {
   inventory: InventoryItem[];
@@ -18,7 +18,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, onSave,
   const filtered = inventory.filter(i => {
     const t = q.toLowerCase();
     return i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t) || i.category.toLowerCase().includes(t);
-  });
+  }).sort(byNewest);
 
   return (
     <div className="space-y-4">
@@ -149,6 +149,7 @@ const InventoryModal: React.FC<{
       heldByName: item ? item.heldByName : '',
       returnLog: item ? item.returnLog : [],
       createdAt: item ? item.createdAt : todayStr(),
+      updatedAt: item ? item.updatedAt : todayStr(),
     });
   };
 

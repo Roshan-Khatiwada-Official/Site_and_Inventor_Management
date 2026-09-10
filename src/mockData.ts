@@ -18,6 +18,7 @@ export const INITIAL_USERS: UserAccount[] = [
     address: '',
     notes: '',
     createdAt: '2026-09-10',
+    updatedAt: '2026-09-10',
   },
 ];
 

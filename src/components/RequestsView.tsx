@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, XCircle, Inbox } from 'lucide-react';
 import { SiteRequest } from '../types';
+import { byNewest } from '../utils/storage';
 
 interface RequestsViewProps {
   requests: SiteRequest[];
@@ -10,7 +11,7 @@ interface RequestsViewProps {
 export const RequestsView: React.FC<RequestsViewProps> = ({ requests, onDecide }) => {
   const [filter, setFilter] = useState<'Pending' | 'All'>('Pending');
 
-  const list = [...requests].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+  const list = [...requests].sort(byNewest)
     .filter(r => filter === 'All' || r.status === 'Pending');
 
   return (

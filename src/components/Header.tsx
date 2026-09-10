@@ -29,6 +29,11 @@ const TABS: Record<UserAccount['role'], { id: string; label: string }[]> = {
     { id: 'available', label: 'Available Sites' },
     { id: 'mywork', label: 'My Work' },
   ],
+  'Field Worker': [
+    { id: 'mysites', label: 'My Sites' },
+    { id: 'available', label: 'Available Sites' },
+    { id: 'mywork', label: 'My Work' },
+  ],
 };
 
 export const Header: React.FC<HeaderProps> = ({

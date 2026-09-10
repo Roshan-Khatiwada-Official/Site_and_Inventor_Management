@@ -8,6 +8,8 @@ interface SiteModalProps {
   isOpen: boolean;
   site: Site | null;
   currentUser: UserAccount;
+  /** Show the "I'll collect this myself" option (user can collect and has no open site). */
+  canReserve?: boolean;
   onClose: () => void;
   onSave: (site: Site) => void;
 }
@@ -16,10 +18,11 @@ function genCode(): string {
   return `STE-${Date.now().toString().slice(-5)}`;
 }
 
-export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser, onClose, onSave }) => {
+export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser, canReserve = false, onClose, onSave }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [mine, setMine] = useState(false);
   const [latitude, setLatitude] = useState<number>(0);
   const [longitude, setLongitude] = useState<number>(0);
   const [supervisor, setSupervisor] = useState('');
@@ -38,6 +41,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       setSupervisorContact(site.supervisorContact);
       setWorkerCount(site.workerCount);
       setNote(site.note);
+      setMine(!!site.reservedById && site.reservedById === currentUser.id);
     } else {
       setCode(genCode());
       setName('');
@@ -48,14 +52,23 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       setSupervisorContact('');
       setWorkerCount(0);
       setNote('');
+      setMine(false);
     }
-  }, [site, isOpen]);
+  }, [site, isOpen, currentUser.id]);
 
   if (!isOpen) return null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    let reservedById = site ? site.reservedById : '';
+    let reservedByName = site ? site.reservedByName : '';
+    if (canReserve) {
+      if (mine) { reservedById = currentUser.id; reservedByName = currentUser.name; }
+      else if (reservedById === currentUser.id) { reservedById = ''; reservedByName = ''; }
+    }
+
     const draft: Site = {
       id: site ? site.id : `site-${Date.now()}`,
       code: code.trim().toUpperCase() || genCode(),
@@ -69,8 +82,11 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       note: note.trim(),
       foundById: site ? site.foundById : currentUser.id,
       foundByName: site ? site.foundByName : currentUser.name,
+      reservedById,
+      reservedByName,
       status: site ? site.status : 'Available',
       createdAt: site ? site.createdAt : todayStr(),
+      updatedAt: site ? site.updatedAt : todayStr(),
     };
     onSave(draft);
     onClose();
@@ -140,6 +156,18 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
             <label className="block font-semibold mb-1">Note</label>
             <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="Anything worth recording about this site…" className={field} />
           </div>
+
+          {canReserve && (
+            <label className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" checked={mine} onChange={e => setMine(e.target.checked)} className="mt-0.5" />
+              <span>
+                <span className="font-semibold text-slate-800">I will collect this site myself</span>
+                <span className="block text-[11px] text-slate-500">
+                  Reserved for you — other collectors won't see it. Leave unchecked to put it in the shared pool.
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>

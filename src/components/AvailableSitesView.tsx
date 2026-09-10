@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { MapPin, Send, Search, Building2, Clock } from 'lucide-react';
+import { MapPin, Send, Search, Building2, Clock, Lock, X } from 'lucide-react';
 import { Site, SiteRequest, Assignment } from '../types';
+import { byNewest } from '../utils/storage';
 
 interface AvailableSitesViewProps {
   sites: Site[];
@@ -8,23 +9,22 @@ interface AvailableSitesViewProps {
   assignments: Assignment[];
   hasOpenWork: boolean;
   onRequest: (siteId: string) => void;
+  onCancelRequest: (requestId: string) => void;
 }
 
-export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, hasOpenWork, onRequest }) => {
+export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, hasOpenWork, onRequest, onCancelRequest }) => {
   const [q, setQ] = useState('');
   const hoursBySite = useMemo(() => {
     const m = new Map<string, number>();
     assignments.forEach(a => m.set(a.siteId, (m.get(a.siteId) || 0) + (Number(a.hoursLogged) || 0)));
     return m;
   }, [assignments]);
-  const statusFor = (siteId: string) => {
-    const r = [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
-    return r?.status;
-  };
+  const latestRequestFor = (siteId: string) =>
+    [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
   const list = sites.filter(s => {
     const t = q.toLowerCase();
-    return s.name.toLowerCase().includes(t) || s.code.toLowerCase().includes(t) || s.foundByName.toLowerCase().includes(t);
-  });
+    return s.name.toLowerCase().includes(t) || s.code.toLowerCase().includes(t) || s.foundByName.toLowerCase().includes(t) || s.category.toLowerCase().includes(t);
+  }).sort(byNewest);
 
   return (
     <div className="space-y-4">
@@ -53,11 +53,15 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {list.map(s => {
-          const st = statusFor(s.id);
+          const req = latestRequestFor(s.id);
+          const st = req?.status;
           return (
             <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
               <div>
-                <div className="font-bold text-slate-900 text-sm">{s.name}</div>
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  {s.name}
+                  {s.reservedById && <span className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 font-medium"><Lock className="w-2.5 h-2.5" />yours</span>}
+                </div>
                 <div className="text-[11px] font-mono text-slate-400">{s.code}</div>
                 {s.category && <div className="text-[11px] text-blue-600 font-medium mt-0.5">{s.category}</div>}
               </div>
@@ -79,7 +83,13 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
               </div>
               <div className="mt-auto pt-2">
                 {st === 'Pending' ? (
-                  <span className="text-xs font-medium text-amber-600">Request pending…</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-amber-600">Request pending…</span>
+                    <button onClick={() => onCancelRequest(req!.id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-md">
+                      <X className="w-3 h-3" /> Cancel
+                    </button>
+                  </div>
                 ) : st === 'Approved' ? (
                   <span className="text-xs font-medium text-emerald-600">Approved — see “My Work”</span>
                 ) : (

@@ -44,7 +44,7 @@ function arr<T>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
-const VALID_ROLES = ['Admin', 'Site Finder', 'Data Collector'];
+const VALID_ROLES = ['Admin', 'Site Finder', 'Data Collector', 'Field Worker'];
 
 function normalize(raw: any): AppData {
   const d = raw || {};
@@ -62,8 +62,11 @@ function normalize(raw: any): AppData {
       note: s.note || s.safetyNotes || '',
       foundById: s.foundById || '',
       foundByName: s.foundByName || '',
+      reservedById: s.reservedById || '',
+      reservedByName: s.reservedByName || '',
       status: s.status === 'Assigned' ? 'Assigned' : 'Available',
       createdAt: s.createdAt || '',
+      updatedAt: s.updatedAt || s.createdAt || '',
     })),
     inventory: arr<any>(d.inventory).filter((i: any) => i && i.id).map((i: any): InventoryItem => ({
       id: String(i.id),
@@ -78,6 +81,7 @@ function normalize(raw: any): AppData {
       heldByName: i.heldByName || '',
       returnLog: arr<ReturnRecord>(i.returnLog),
       createdAt: i.createdAt || '',
+      updatedAt: i.updatedAt || i.createdAt || '',
     })),
     assignments: arr<any>(d.assignments).filter((a: any) => a && a.id).map((a: any): Assignment => ({
       id: String(a.id),
@@ -91,6 +95,7 @@ function normalize(raw: any): AppData {
       hoursLogged: Number(a.hoursLogged) || 0,
       sessions: arr<any>(a.sessions),
       createdAt: a.createdAt || '',
+      updatedAt: a.updatedAt || a.createdAt || '',
     })),
     requests: arr<any>(d.requests).filter((r: any) => r && r.id).map((r: any): SiteRequest => ({
       id: String(r.id),
@@ -101,6 +106,7 @@ function normalize(raw: any): AppData {
       status: r.status === 'Approved' ? 'Approved' : r.status === 'Rejected' ? 'Rejected' : 'Pending',
       requestedAt: r.requestedAt || '',
       decidedAt: r.decidedAt || undefined,
+      updatedAt: r.updatedAt || r.decidedAt || r.requestedAt || '',
     })),
     users: arr<any>(d.users)
       .filter((u: any) => u && u.id && u.loginId)
@@ -116,6 +122,7 @@ function normalize(raw: any): AppData {
         address: u.address || '',
         notes: u.notes || '',
         createdAt: u.createdAt || '',
+        updatedAt: u.updatedAt || u.createdAt || '',
         lastLogin: u.lastLogin || undefined,
       })),
   };

@@ -21,6 +21,8 @@ import {
   UserAccount,
   CollectionSession,
   ReturnRecord,
+  CAN_FIND_SITES,
+  CAN_COLLECT,
 } from './types';
 import {
   BridgeConfig,
@@ -46,6 +48,8 @@ import { LoadingOverlay } from './components/LoadingOverlay';
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
+
+const nowIso = () => new Date().toISOString();
 
 /** Union two lists by id; the local copy wins on conflict. Keeps concurrent
  *  additions from other people instead of overwriting them. */
@@ -107,7 +111,7 @@ export default function App() {
   const busyRef = useRef(false);            // a pull/push request is in flight
   const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
 
-  const POLL_MS = 12000;
+  const POLL_MS = 6000;
 
   const snapshotOf = (d: { sites: any; inventory: any; assignments: any; requests: any; users: any }) =>
     JSON.stringify([d.sites, d.inventory, d.assignments, d.requests, d.users]);
@@ -166,6 +170,7 @@ export default function App() {
     pushTimer.current = setTimeout(async () => {
       try {
         setIsSyncing(true);
+        setBlockingLoad('Saving…');
         busyRef.current = true;
 
         let remote: AppData | null = null;
@@ -202,8 +207,9 @@ export default function App() {
         busyRef.current = false;
         if (mySeq === pushSeqRef.current) pushPendingRef.current = false;
         setIsSyncing(false);
+        setBlockingLoad(null);
       }
-    }, 1200);
+    }, 900);
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites, inventory, assignments, requests, users]);
@@ -222,6 +228,7 @@ export default function App() {
         const incoming = snapshotOf(d);
         if (incoming === snapshotRef.current) return;
         // Merge (local wins by id) so an in-flight local edit is never dropped.
+        setBlockingLoad('Updating…');
         hydratingRef.current = true;
         setSites(prev => mergeById(d.sites, prev));
         setInventory(prev => mergeById(d.inventory, prev));
@@ -230,7 +237,7 @@ export default function App() {
         setUsers(prev => (d.users.length ? mergeById(d.users, prev) : prev));
         setCurrentUser(prev => (prev ? d.users.find(u => u.id === prev.id) || prev : prev));
         snapshotRef.current = incoming;
-        setTimeout(() => { hydratingRef.current = false; }, 0);
+        setTimeout(() => { hydratingRef.current = false; setBlockingLoad(null); }, 350);
       } catch {
         /* transient — try again next tick */
       } finally {
@@ -240,10 +247,20 @@ export default function App() {
 
     const timer = window.setInterval(poll, POLL_MS);
     const onVisible = () => { if (!document.hidden) poll(); };
+    // Refresh the moment the user comes back to / touches the screen.
+    let lastNudge = 0;
+    const nudge = () => {
+      const t = Date.now();
+      if (t - lastNudge > 4000) { lastNudge = t; poll(); }
+    };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener('pointerdown', nudge);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('pointerdown', nudge);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridgeConfig]);
@@ -286,8 +303,9 @@ export default function App() {
 
   // ---- site handlers ----
   const saveSite = (draft: Site) => {
-    setSites(prev => (prev.some(s => s.id === draft.id) ? prev.map(s => (s.id === draft.id ? draft : s)) : [...prev, draft]));
-    showToast(`Saved site: ${draft.name}`);
+    const s: Site = { ...draft, updatedAt: nowIso() };
+    setSites(prev => (prev.some(x => x.id === s.id) ? prev.map(x => (x.id === s.id ? s : x)) : [...prev, s]));
+    showToast(`Saved site: ${s.name}`);
   };
   const deleteSite = (id: string) => {
     if (assignments.some(a => a.siteId === id)) {
@@ -305,8 +323,9 @@ export default function App() {
 
   // ---- inventory handlers ----
   const saveInventoryItem = (draft: InventoryItem) => {
-    setInventory(prev => (prev.some(i => i.id === draft.id) ? prev.map(i => (i.id === draft.id ? draft : i)) : [...prev, draft]));
-    showToast(`Saved item: ${draft.name}`);
+    const it: InventoryItem = { ...draft, updatedAt: nowIso() };
+    setInventory(prev => (prev.some(i => i.id === it.id) ? prev.map(i => (i.id === it.id ? it : i)) : [...prev, it]));
+    showToast(`Saved item: ${it.name}`);
   };
   const deleteInventoryItem = (id: string) => {
     if (inventory.find(i => i.id === id)?.heldById) {
@@ -325,10 +344,10 @@ export default function App() {
     setInventory(prev => prev.map(i => {
       const shouldHold = itemIds.includes(i.id);
       if (shouldHold && i.heldById !== collectorId && !i.heldById) {
-        return { ...i, heldById: collectorId, heldByName: collector?.name || '' };
+        return { ...i, heldById: collectorId, heldByName: collector?.name || '', updatedAt: nowIso() };
       }
       if (!shouldHold && i.heldById === collectorId) {
-        return { ...i, heldById: '', heldByName: '' };
+        return { ...i, heldById: '', heldByName: '', updatedAt: nowIso() };
       }
       return i;
     }));
@@ -349,9 +368,9 @@ export default function App() {
   };
 
   const saveAssignment = (draft: Assignment) => {
-    const full = denormAssignment(draft);
+    const full = { ...denormAssignment(draft), updatedAt: nowIso() };
     setAssignments(prev => (prev.some(a => a.id === full.id) ? prev.map(a => (a.id === full.id ? full : a)) : [...prev, full]));
-    setSites(prev => prev.map(s => (s.id === full.siteId ? { ...s, status: 'Assigned' } : s)));
+    setSites(prev => prev.map(s => (s.id === full.siteId ? { ...s, status: 'Assigned', updatedAt: nowIso() } : s)));
     showToast(`Assigned ${full.collectorName} to ${full.siteName}.`);
   };
 
@@ -362,7 +381,7 @@ export default function App() {
     if (removed) {
       const siteStillUsed = assignments.some(a => a.id !== id && a.siteId === removed.siteId);
       if (!siteStillUsed) {
-        setSites(prev => prev.map(s => (s.id === removed.siteId ? { ...s, status: 'Available' } : s)));
+        setSites(prev => prev.map(s => (s.id === removed.siteId ? { ...s, status: 'Available', updatedAt: nowIso() } : s)));
       }
     }
     showToast('Assignment deleted.');
@@ -378,13 +397,14 @@ export default function App() {
         sessions,
         hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0),
         status: 'Completed',
+        updatedAt: nowIso(),
       };
     }));
     showToast(session ? `Submitted ${session.hours}h — site marked done.` : 'Site marked done.');
   };
 
   const reopenAssignment = (assignmentId: string) => {
-    setAssignments(prev => prev.map(a => (a.id === assignmentId ? { ...a, status: 'Active' } : a)));
+    setAssignments(prev => prev.map(a => (a.id === assignmentId ? { ...a, status: 'Active', updatedAt: nowIso() } : a)));
     showToast('Assignment re-opened.');
   };
 
@@ -406,6 +426,7 @@ export default function App() {
         condition: ok ? 'OK' : 'Flagged',
         conditionNote: ok ? '' : note.trim(),
         returnLog: [record, ...i.returnLog].slice(0, 50),
+        updatedAt: nowIso(),
       };
     }));
     const nm = inventory.find(i => i.id === itemId)?.name || 'item';
@@ -413,7 +434,7 @@ export default function App() {
   };
 
   const clearItemFlag = (itemId: string) => {
-    setInventory(prev => prev.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '' } : i)));
+    setInventory(prev => prev.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '', updatedAt: nowIso() } : i)));
     showToast('Flag cleared.');
   };
 
@@ -427,7 +448,7 @@ export default function App() {
     const site = sites.find(s => s.id === siteId);
     if (!site) return;
     if (collectorHasOpenWork(currentUser.id)) {
-      showToast('Finish your current site first — one request/site at a time.');
+      showToast('Finish your current site first — one site at a time.');
       return;
     }
     const req: SiteRequest = {
@@ -437,17 +458,26 @@ export default function App() {
       collectorId: currentUser.id,
       collectorName: currentUser.name,
       status: 'Pending',
-      requestedAt: new Date().toISOString(),
+      requestedAt: nowIso(),
+      updatedAt: nowIso(),
     };
     setRequests(prev => [...prev, req]);
     showToast(`Requested "${site.name}".`);
+  };
+
+  // A collector can withdraw their own pending request.
+  const cancelRequest = (requestId: string) => {
+    const req = requests.find(r => r.id === requestId);
+    if (!req || req.status !== 'Pending' || req.collectorId !== currentUser?.id) return;
+    setRequests(prev => prev.filter(r => r.id !== requestId));
+    showToast('Request cancelled.');
   };
 
   const decideRequest = (requestId: string, approve: boolean) => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
     setRequests(prev => prev.map(r => (r.id === requestId
-      ? { ...r, status: approve ? 'Approved' : 'Rejected', decidedAt: new Date().toISOString() }
+      ? { ...r, status: approve ? 'Approved' : 'Rejected', decidedAt: nowIso(), updatedAt: nowIso() }
       : r)));
     if (approve) {
       const already = assignments.some(a => a.siteId === req.siteId && a.collectorId === req.collectorId && a.status === 'Active');
@@ -464,9 +494,10 @@ export default function App() {
           hoursLogged: 0,
           sessions: [],
           createdAt: todayStr(),
+          updatedAt: nowIso(),
         });
       } else {
-        setSites(prev => prev.map(s => (s.id === req.siteId ? { ...s, status: 'Assigned' } : s)));
+        setSites(prev => prev.map(s => (s.id === req.siteId ? { ...s, status: 'Assigned', updatedAt: nowIso() } : s)));
       }
     }
     showToast(approve ? 'Request approved — assignment created.' : 'Request rejected.');
@@ -474,9 +505,10 @@ export default function App() {
 
   // ---- user handlers ----
   const saveUser = (draft: UserAccount) => {
-    setUsers(prev => (prev.some(u => u.id === draft.id) ? prev.map(u => (u.id === draft.id ? draft : u)) : [...prev, draft]));
-    if (currentUser?.id === draft.id) setCurrentUser(draft);
-    showToast(`Saved ${draft.name}.`);
+    const u: UserAccount = { ...draft, updatedAt: nowIso() };
+    setUsers(prev => (prev.some(x => x.id === u.id) ? prev.map(x => (x.id === u.id ? u : x)) : [...prev, u]));
+    if (currentUser?.id === u.id) setCurrentUser(u);
+    showToast(`Saved ${u.name}.`);
   };
   const deleteUser = (id: string) => {
     if (id === currentUser?.id) { showToast("You can't delete your own account."); return; }
@@ -502,9 +534,18 @@ export default function App() {
     () => (currentUser ? requests.filter(r => r.collectorId === currentUser.id) : []),
     [requests, currentUser]
   );
-  const availableSites = useMemo(() => sites.filter(s => s.status === 'Available'), [sites]);
-  const dataCollectors = useMemo(() => users.filter(u => u.role === 'Data Collector' && u.status === 'Active'), [users]);
+  // Sites this person may collect at: open pool + any reserved for them.
+  const availableSites = useMemo(
+    () => sites.filter(s => s.status === 'Available' && (!s.reservedById || s.reservedById === currentUser?.id)),
+    [sites, currentUser]
+  );
+  const dataCollectors = useMemo(
+    () => users.filter(u => CAN_COLLECT.includes(u.role) && u.status === 'Active'),
+    [users]
+  );
   const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
+  const canFind = currentUser ? CAN_FIND_SITES.includes(currentUser.role) : false;
+  const canCollect = currentUser ? CAN_COLLECT.includes(currentUser.role) : false;
 
   // Items currently held by a collector (fixed kit, kept across all their sites).
   const itemsOutCount = useMemo(() => inventory.filter(i => i.heldById).length, [inventory]);
@@ -600,7 +641,7 @@ export default function App() {
           />
         )}
 
-        {role === 'Site Finder' && (
+        {canFind && activeTab === 'mysites' && (
           <SitesView
             mode="finder"
             sites={mySites}
@@ -608,19 +649,21 @@ export default function App() {
             onSave={saveSite}
             onDelete={deleteSite}
             currentUser={currentUser}
+            canReserve={canCollect && !myOpenWork}
           />
         )}
 
-        {role === 'Data Collector' && activeTab === 'available' && (
+        {canCollect && activeTab === 'available' && (
           <AvailableSitesView
             sites={availableSites}
             myRequests={myRequests}
             assignments={assignments}
             hasOpenWork={myOpenWork}
             onRequest={createRequest}
+            onCancelRequest={cancelRequest}
           />
         )}
-        {role === 'Data Collector' && activeTab === 'mywork' && (
+        {canCollect && activeTab === 'mywork' && (
           <MyWorkView
             assignments={myAssignments}
             sites={sites}
@@ -648,5 +691,6 @@ export default function App() {
 function roleTabIds(role: UserAccount['role']): string[] {
   if (role === 'Admin') return ['sites', 'inventory', 'returns', 'assignments', 'requests', 'reports', 'users'];
   if (role === 'Site Finder') return ['mysites'];
+  if (role === 'Field Worker') return ['mysites', 'available', 'mywork'];
   return ['available', 'mywork'];
 }

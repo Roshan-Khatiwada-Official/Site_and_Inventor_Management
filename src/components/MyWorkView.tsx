@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, MapPin, Package, CheckCircle2, Briefcase } from 'lucide-react';
 import { Assignment, Site, InventoryItem, CollectionSession } from '../types';
-import { todayStr } from '../utils/storage';
+import { todayStr, byNewest } from '../utils/storage';
 
 interface MyWorkViewProps {
   assignments: Assignment[];
@@ -44,7 +44,7 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKi
       )}
 
       <div className="space-y-3">
-        {assignments.map(a => (
+        {[...assignments].sort(byNewest).map(a => (
           <AssignmentCard
             key={a.id}
             a={a}

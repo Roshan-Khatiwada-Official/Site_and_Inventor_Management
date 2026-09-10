@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, MapPin, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, Search, Lock } from 'lucide-react';
 import { Site, UserAccount } from '../types';
 import { SiteModal } from './SiteModal';
+import { byNewest } from '../utils/storage';
 
 interface SitesViewProps {
   mode: 'admin' | 'finder';
   sites: Site[];
   users: UserAccount[];
   currentUser: UserAccount;
+  canReserve?: boolean;
   onSave: (site: Site) => void;
   onDelete: (id: string) => void;
 }
 
-export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, onSave, onDelete }) => {
+export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, canReserve, onSave, onDelete }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
   const [q, setQ] = useState('');
@@ -26,7 +28,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
       s.supervisor.toLowerCase().includes(t) ||
       s.foundByName.toLowerCase().includes(t)
     );
-  });
+  }).sort(byNewest);
 
   const openNew = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (s: Site) => { setEditing(s); setModalOpen(true); };
@@ -78,6 +80,11 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
                   <td className="px-4 py-2.5 font-mono text-slate-500">{s.code}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-900">
                     {s.name}
+                    {s.reservedById && (
+                      <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-indigo-600 font-medium">
+                        <Lock className="w-2.5 h-2.5" />{s.reservedByName}
+                      </span>
+                    )}
                     {s.note && <div className="text-[11px] text-slate-400 font-normal truncate max-w-[220px]">{s.note}</div>}
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{s.category || '—'}</td>
@@ -125,6 +132,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
         isOpen={modalOpen}
         site={editing}
         currentUser={currentUser}
+        canReserve={canReserve}
         onClose={() => setModalOpen(false)}
         onSave={onSave}
       />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, ShieldCheck, Package } from 'lucide-react';
 import { UserAccount, UserRole, InventoryItem } from '../types';
-import { todayStr } from '../utils/storage';
+import { todayStr, byNewest } from '../utils/storage';
 
 interface UsersViewProps {
   users: UserAccount[];
@@ -12,7 +12,7 @@ interface UsersViewProps {
   onSetKit: (collectorId: string, itemIds: string[]) => void;
 }
 
-const ROLES: UserRole[] = ['Admin', 'Site Finder', 'Data Collector'];
+const ROLES: UserRole[] = ['Admin', 'Site Finder', 'Data Collector', 'Field Worker'];
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, inventory, onSave, onDelete, onSetKit }) => {
   const [open, setOpen] = useState(false);
@@ -49,7 +49,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, invent
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map(u => (
+              {[...users].sort(byNewest).map(u => (
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2.5 font-medium text-slate-900">
                     {u.name}{u.id === currentUser.id && <span className="ml-1 text-[10px] text-blue-600">(you)</span>}
@@ -189,6 +189,7 @@ const UserModal: React.FC<{
       address: address.trim(),
       notes: notes.trim(),
       createdAt: user ? user.createdAt : todayStr(),
+      updatedAt: user ? user.updatedAt : todayStr(),
       lastLogin: user?.lastLogin,
     });
   };

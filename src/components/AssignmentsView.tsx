@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, ClipboardList, Clock, Package } from 'lucide-react';
 import { Assignment, Site, InventoryItem, UserAccount } from '../types';
-import { todayStr } from '../utils/storage';
+import { todayStr, byNewest } from '../utils/storage';
 
 interface AssignmentsViewProps {
   assignments: Assignment[];
@@ -50,7 +50,7 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
               {assignments.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No assignments yet.</td></tr>
               )}
-              {assignments.map(a => {
+              {[...assignments].sort(byNewest).map(a => {
                 const kit = kitOf(a.collectorId);
                 return (
                   <tr key={a.id} className="hover:bg-slate-50">
@@ -135,6 +135,7 @@ const AssignmentModal: React.FC<{
       hoursLogged: assignment?.hoursLogged || 0,
       sessions: assignment?.sessions || [],
       createdAt: assignment?.createdAt || todayStr(),
+      updatedAt: assignment?.updatedAt || todayStr(),
     });
   };
 

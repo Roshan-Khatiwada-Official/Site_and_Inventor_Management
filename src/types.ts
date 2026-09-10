@@ -1,15 +1,21 @@
 // ---------------------------------------------------------------------------
 // Site & Inventory Manager — lean data model
 //
-// Three roles:
-//   - Admin         : manages inventory, assigns data collectors to sites,
-//                     approves site requests, sees all reports.
-//   - Site Finder    : adds available field sites (only sees sites they found).
-//   - Data Collector : browses available sites, requests them, logs collection
-//                     hours on their assignments (only sees their own work).
+// Roles:
+//   - Admin         : manages inventory, assigns collectors to sites, approves
+//                     requests, sees all reports.
+//   - Site Finder   : adds field sites (only sees sites they found).
+//   - Data Collector: browses available sites, requests them, logs collection
+//                     hours (only sees their own work).
+//   - Field Worker  : can do both — find sites AND collect data.
 // ---------------------------------------------------------------------------
 
-export type UserRole = 'Admin' | 'Site Finder' | 'Data Collector';
+export type UserRole = 'Admin' | 'Site Finder' | 'Data Collector' | 'Field Worker';
+
+/** Roles allowed to add sites. */
+export const CAN_FIND_SITES: UserRole[] = ['Site Finder', 'Field Worker'];
+/** Roles allowed to collect data / request sites. */
+export const CAN_COLLECT: UserRole[] = ['Data Collector', 'Field Worker'];
 
 export interface UserAccount {
   id: string;
@@ -23,6 +29,7 @@ export interface UserAccount {
   address: string;
   notes: string;
   createdAt: string;
+  updatedAt: string;
   lastLogin?: string;
 }
 
@@ -47,10 +54,13 @@ export interface Site {
   supervisorContact: string;
   workerCount: number;
   note: string;
-  foundById: string;          // Site Finder user id
+  foundById: string;          // user id who added it
   foundByName: string;        // denormalised for reporting
+  reservedById: string;       // if set, only this user may collect here ('' = open pool)
+  reservedByName: string;
   status: SiteStatus;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface ReturnRecord {
@@ -74,6 +84,7 @@ export interface InventoryItem {
   heldByName: string;         // denormalised
   returnLog: ReturnRecord[];  // check-in history
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CollectionSession {
@@ -96,6 +107,7 @@ export interface Assignment {
   hoursLogged: number;        // sum of session hours
   sessions: CollectionSession[];
   createdAt: string;
+  updatedAt: string;
 }
 
 export type RequestStatus = 'Pending' | 'Approved' | 'Rejected';
@@ -109,4 +121,5 @@ export interface SiteRequest {
   status: RequestStatus;
   requestedAt: string;
   decidedAt?: string;
+  updatedAt: string;
 }
