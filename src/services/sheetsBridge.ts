@@ -21,37 +21,23 @@ export interface AppData {
   users: UserAccount[];
 }
 
-const BRIDGE_STORAGE_KEY = 'site_mgr_sheets_bridge_config';
-
 /**
- * Built-in default connection so every device talks to the same Google Sheet
- * out of the box. This token ships in the client bundle — it is effectively
- * shared with everyone who can open the app (rotate it in the Apps Script).
+ * Built-in connection so every device talks to the same Google Sheet out of
+ * the box. This token ships in the client bundle — it is effectively shared
+ * with everyone who can open the app (rotate it in the Apps Script).
+ *
+ * The Web app URL must point at a deployment running the generic
+ * `apps-script/Code.gs` (returns all collections, no fixed list).
  */
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   webAppUrl:
-    'https://script.google.com/macros/s/AKfycbxWTKqd5PMYjHHlxqjj391JNQmvd5U0sU5ZljMXUQJw6ngxmgz9cQajZF07glcet6Ax3g/exec',
+    'https://script.google.com/macros/s/AKfycby53NMy0jCyI_DVccA87xVOjAIYkDaX-uSQ0w6c_QPeXoBvXhIk4iJ69drzuG9Q2yiPug/exec',
   token: 'siteops-db-key-Kq93ZmXp7RtY2wLn',
   autoSyncEnabled: true,
 };
 
 export function getStoredBridgeConfig(): BridgeConfig | null {
-  try {
-    const raw = localStorage.getItem(BRIDGE_STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as BridgeConfig;
-  } catch {
-    /* ignore */
-  }
   return { ...DEFAULT_BRIDGE_CONFIG };
-}
-
-export function saveStoredBridgeConfig(config: BridgeConfig | null): void {
-  try {
-    if (config) localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(config));
-    else localStorage.removeItem(BRIDGE_STORAGE_KEY);
-  } catch (e) {
-    console.error('Error saving bridge config:', e);
-  }
 }
 
 function arr<T>(v: any): T[] {

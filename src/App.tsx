@@ -25,7 +25,6 @@ import {
   BridgeConfig,
   AppData,
   getStoredBridgeConfig,
-  saveStoredBridgeConfig,
   bridgePull,
   bridgePush,
 } from './services/sheetsBridge';

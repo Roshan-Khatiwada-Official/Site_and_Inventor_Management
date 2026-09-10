@@ -17,6 +17,9 @@ No staff Google logins.
 6. Copy the **Web app URL** (ends in `/exec`) and put it in
    `src/services/sheetsBridge.ts` → `DEFAULT_BRIDGE_CONFIG.webAppUrl`.
 
+Current deployment URL (in `src/services/sheetsBridge.ts`):
+`https://script.google.com/macros/s/AKfycby53NMy0jCyI_DVccA87xVOjAIYkDaX-uSQ0w6c_QPeXoBvXhIk4iJ69drzuG9Q2yiPug/exec`
+
 ## Redeploying after a code change (e.g. new collections)
 
 The script is **collection-agnostic** — it stores the whole dataset in the hidden
