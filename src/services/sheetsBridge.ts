@@ -1,11 +1,9 @@
-import { Site, DataCollector, DailyAssignment, Equipment, TransferLog, UserAccount } from '../types';
+import { Site, InventoryItem, Assignment, SiteRequest, UserAccount } from '../types';
 
 /**
  * Client for the Google Apps Script "database bridge" (see /apps-script/Code.gs).
- *
- * The Apps Script Web App is deployed as "Anyone" access and authenticates
- * requests with a shared secret token. It stores the authoritative JSON in a
- * hidden `_raw` tab and also renders human-readable tabs for each collection.
+ * The Web App authenticates with a shared token and stores the authoritative
+ * JSON in a hidden `_raw` tab (plus readable per-collection tabs).
  */
 
 export interface BridgeConfig {
@@ -15,29 +13,24 @@ export interface BridgeConfig {
   autoSyncEnabled?: boolean;
 }
 
-export interface AllOperationalData {
+export interface AppData {
   sites: Site[];
-  collectors: DataCollector[];
-  assignments: DailyAssignment[];
-  equipment: Equipment[];
-  transfers: TransferLog[];
+  inventory: InventoryItem[];
+  assignments: Assignment[];
+  requests: SiteRequest[];
   users: UserAccount[];
 }
 
 const BRIDGE_STORAGE_KEY = 'site_mgr_sheets_bridge_config';
 
 /**
- * Built-in default connection so every device/browser talks to the same
- * Google Sheet database out of the box — no manual URL/token entry, and the
- * login screen can load real accounts from the sheet on first run.
- *
- * NOTE: this token ships in the client bundle, so it is effectively shared
- * with everyone who can open the app. That matches how this app is used
- * (one shared operational database). Rotate it by editing SECRET_TOKEN in
- * the Apps Script, redeploying the same deployment, and updating this value.
+ * Built-in default connection so every device talks to the same Google Sheet
+ * out of the box. This token ships in the client bundle — it is effectively
+ * shared with everyone who can open the app (rotate it in the Apps Script).
  */
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
-  webAppUrl: 'https://script.google.com/macros/s/AKfycbxWTKqd5PMYjHHlxqjj391JNQmvd5U0sU5ZljMXUQJw6ngxmgz9cQajZF07glcet6Ax3g/exec',
+  webAppUrl:
+    'https://script.google.com/macros/s/AKfycbxWTKqd5PMYjHHlxqjj391JNQmvd5U0sU5ZljMXUQJw6ngxmgz9cQajZF07glcet6Ax3g/exec',
   token: 'siteops-db-key-Kq93ZmXp7RtY2wLn',
   autoSyncEnabled: true,
 };
@@ -49,80 +42,91 @@ export function getStoredBridgeConfig(): BridgeConfig | null {
   } catch {
     /* ignore */
   }
-  return DEFAULT_BRIDGE_CONFIG.webAppUrl ? { ...DEFAULT_BRIDGE_CONFIG } : null;
+  return { ...DEFAULT_BRIDGE_CONFIG };
 }
 
 export function saveStoredBridgeConfig(config: BridgeConfig | null): void {
   try {
-    if (config) {
-      localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(config));
-    } else {
-      localStorage.removeItem(BRIDGE_STORAGE_KEY);
-    }
+    if (config) localStorage.setItem(BRIDGE_STORAGE_KEY, JSON.stringify(config));
+    else localStorage.removeItem(BRIDGE_STORAGE_KEY);
   } catch (e) {
     console.error('Error saving bridge config:', e);
   }
 }
 
-function normalize(raw: any): AllOperationalData {
+function arr<T>(v: any): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
+const VALID_ROLES = ['Admin', 'Site Finder', 'Data Collector'];
+
+function normalize(raw: any): AppData {
   const d = raw || {};
   return {
-    sites: Array.isArray(d.sites) ? d.sites : [],
-    collectors: Array.isArray(d.collectors) ? d.collectors : [],
-    assignments: Array.isArray(d.assignments) ? d.assignments : [],
-    equipment: Array.isArray(d.equipment) ? d.equipment : [],
-    transfers: Array.isArray(d.transfers) ? d.transfers : [],
-    users: Array.isArray(d.users) ? d.users : [],
+    sites: arr<any>(d.sites).map((s: any): Site => ({
+      id: s.id,
+      code: s.code || '',
+      name: s.name || '',
+      latitude: Number(s.latitude ?? s.coordinates?.lat) || 0,
+      longitude: Number(s.longitude ?? s.coordinates?.lng) || 0,
+      supervisor: s.supervisor || '',
+      supervisorContact: s.supervisorContact || s.contactPhone || '',
+      workerCount: Number(s.workerCount) || 0,
+      note: s.note || s.safetyNotes || '',
+      foundById: s.foundById || '',
+      foundByName: s.foundByName || '',
+      status: s.status === 'Assigned' ? 'Assigned' : 'Available',
+      createdAt: s.createdAt || '',
+    })),
+    inventory: arr<InventoryItem>(d.inventory),
+    assignments: arr<any>(d.assignments).map((a: any) => ({
+      ...a,
+      inventoryItemIds: arr<string>(a.inventoryItemIds),
+      sessions: arr<any>(a.sessions),
+      hoursLogged: Number(a.hoursLogged) || 0,
+      status: a.status === 'Completed' ? 'Completed' : 'Active',
+    })),
+    requests: arr<SiteRequest>(d.requests),
+    users: arr<any>(d.users).map((u: any): UserAccount => ({
+      ...u,
+      role: VALID_ROLES.includes(u.role) ? u.role : 'Data Collector',
+      status: u.status === 'Suspended' ? 'Suspended' : 'Active',
+    })),
   };
 }
 
 /** Read the full dataset from the Google Sheet. */
-export async function bridgePull(config: BridgeConfig): Promise<AllOperationalData> {
+export async function bridgePull(config: BridgeConfig): Promise<AppData> {
   const url = `${config.webAppUrl}?action=read&token=${encodeURIComponent(config.token)}`;
   const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-
-  if (!res.ok) {
-    throw new Error(`Sheet bridge read failed (HTTP ${res.status}). Check the Web app URL.`);
-  }
+  if (!res.ok) throw new Error(`Sheet read failed (HTTP ${res.status}). Check the Web app URL.`);
 
   const json = await res.json().catch(() => {
-    throw new Error('Sheet bridge returned an invalid response. Re-check the deployment URL and access = "Anyone".');
+    throw new Error('Sheet returned an invalid response. Check the deployment URL and access = "Anyone".');
   });
-
-  if (!json.ok) {
-    throw new Error(json.error || 'Sheet bridge rejected the read request.');
-  }
+  if (!json.ok) throw new Error(json.error || 'Sheet rejected the read request.');
 
   return normalize(json.data);
 }
 
-/** Overwrite the full dataset in the Google Sheet with the app's current data. */
-export async function bridgePush(config: BridgeConfig, data: AllOperationalData): Promise<string> {
+/** Overwrite the full dataset in the Google Sheet. */
+export async function bridgePush(config: BridgeConfig, data: AppData): Promise<string> {
   const res = await fetch(config.webAppUrl, {
     method: 'POST',
-    // text/plain keeps this a "simple" CORS request (no preflight), which
-    // Apps Script Web Apps support.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     redirect: 'follow',
     body: JSON.stringify({ action: 'write', token: config.token, data }),
   });
-
-  if (!res.ok) {
-    throw new Error(`Sheet bridge write failed (HTTP ${res.status}).`);
-  }
+  if (!res.ok) throw new Error(`Sheet write failed (HTTP ${res.status}).`);
 
   const json = await res.json().catch(() => {
-    throw new Error('Sheet bridge returned an invalid response during write.');
+    throw new Error('Sheet returned an invalid response during write.');
   });
-
-  if (!json.ok) {
-    throw new Error(json.error || 'Sheet bridge rejected the write request.');
-  }
+  if (!json.ok) throw new Error(json.error || 'Sheet rejected the write request.');
 
   return json.savedAt || new Date().toISOString();
 }
 
-/** Quick connectivity + auth check used by the "Connect" button. */
-export async function bridgeTestConnection(config: BridgeConfig): Promise<AllOperationalData> {
+export async function bridgeTestConnection(config: BridgeConfig): Promise<AppData> {
   return bridgePull(config);
 }

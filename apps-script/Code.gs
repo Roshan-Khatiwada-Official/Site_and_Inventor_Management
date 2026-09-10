@@ -1,39 +1,22 @@
 /**
- * Site & Inventory Manager — Google Sheets database bridge
- * ------------------------------------------------------------------
- * This script turns the spreadsheet it is attached to into the live
- * database for the Site & Inventory Manager web app.
+ * Site & Inventory Manager — Google Sheets database bridge (generic).
  *
- * SETUP (one time):
- *   1. Open your Google Sheet (or create a blank one).
- *   2. Extensions  ->  Apps Script.
- *   3. Delete anything there, paste this whole file, and save.
- *   4. Change SECRET_TOKEN below to your own long random string.
- *   5. Deploy  ->  New deployment  ->  type "Web app".
- *        - Execute as:  Me
- *        - Who has access:  Anyone
- *      Click Deploy, authorise, and COPY the "Web app URL".
- *   6. In the app: open "Sheets Sync", paste the Web app URL and the
- *      same SECRET_TOKEN, then click Connect.
+ * Stores the authoritative JSON in a hidden `_raw` tab and renders one readable
+ * tab per top-level array in the data (sites, inventory, assignments, requests,
+ * users, …). Collection-agnostic: no code change needed when collections change.
  *
- * To change the code later you must Deploy -> Manage deployments ->
- * edit the existing deployment and pick the new version (so the URL
- * stays the same).
+ * SETUP / REDEPLOY:
+ *   1. Google Sheet -> Extensions -> Apps Script -> paste this file -> Save.
+ *   2. Set SECRET_TOKEN below to your own long random string.
+ *   3. Deploy -> Manage deployments -> edit -> Version: New version -> Deploy
+ *      (keeps the same Web app URL).
  */
 
-// >>> CHANGE THIS to your own private random string (keep it secret). <<<
-var SECRET_TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
-
+var SECRET_TOKEN = 'siteops-db-key-Kq93ZmXp7RtY2wLn';
 var RAW_SHEET = '_raw';
-var COLLECTIONS = ['sites', 'collectors', 'assignments', 'equipment', 'transfers', 'users'];
 
-function doGet(e) {
-  return handleRequest(e);
-}
-
-function doPost(e) {
-  return handleRequest(e);
-}
+function doGet(e) { return handleRequest(e); }
+function doPost(e) { return handleRequest(e); }
 
 function handleRequest(e) {
   var output = ContentService.createTextOutput();
@@ -43,11 +26,7 @@ function handleRequest(e) {
     var params = (e && e.parameter) || {};
     var body = {};
     if (e && e.postData && e.postData.contents) {
-      try {
-        body = JSON.parse(e.postData.contents);
-      } catch (parseErr) {
-        body = {};
-      }
+      try { body = JSON.parse(e.postData.contents); } catch (err) { body = {}; }
     }
 
     var token = body.token || params.token;
@@ -78,29 +57,19 @@ function handleRequest(e) {
   }
 }
 
-function book() {
-  return SpreadsheetApp.getActiveSpreadsheet();
-}
+function book() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
 function readAll() {
   var sheet = book().getSheetByName(RAW_SHEET);
-  if (!sheet) return emptyData();
+  if (!sheet) return {};
   var value = sheet.getRange(1, 1).getValue();
-  if (!value) return emptyData();
+  if (!value) return {};
   try {
     var parsed = JSON.parse(value);
-    var result = emptyData();
-    COLLECTIONS.forEach(function (name) {
-      if (Array.isArray(parsed[name])) result[name] = parsed[name];
-    });
-    return result;
+    return (parsed && typeof parsed === 'object') ? parsed : {};
   } catch (err) {
-    return emptyData();
+    return {};
   }
-}
-
-function emptyData() {
-  return { sites: [], collectors: [], assignments: [], equipment: [], transfers: [], users: [] };
 }
 
 function writeAll(data) {
@@ -111,9 +80,10 @@ function writeAll(data) {
   raw.getRange(1, 1).setValue(JSON.stringify(data));
   try { raw.hideSheet(); } catch (hideErr) {}
 
-  COLLECTIONS.forEach(function (name) {
-    var rows = Array.isArray(data[name]) ? data[name] : [];
-    renderReadableTab(wb, name, rows);
+  Object.keys(data).forEach(function (key) {
+    if (Array.isArray(data[key])) {
+      renderReadableTab(wb, key, data[key]);
+    }
   });
 }
 
@@ -127,15 +97,17 @@ function renderReadableTab(wb, name, rows) {
 
   var columns = [];
   rows.forEach(function (row) {
-    Object.keys(row).forEach(function (key) {
-      if (columns.indexOf(key) < 0) columns.push(key);
-    });
+    if (row && typeof row === 'object') {
+      Object.keys(row).forEach(function (k) {
+        if (columns.indexOf(k) < 0) columns.push(k);
+      });
+    }
   });
 
   var matrix = [columns];
   rows.forEach(function (row) {
-    matrix.push(columns.map(function (col) {
-      var v = row[col];
+    matrix.push(columns.map(function (c) {
+      var v = row ? row[c] : '';
       if (v === null || v === undefined) return '';
       if (typeof v === 'object') return JSON.stringify(v);
       return v;

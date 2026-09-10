@@ -1,48 +1,38 @@
 # Google Sheet as the database — setup
 
 This makes one Google Sheet the shared, always-on database for the app.
-No staff Google logins, no hourly token expiry.
+No staff Google logins.
 
-## What you need
-- A Google account (the "owner" of the database).
-- One Google Sheet (blank is fine).
-
-## Steps
+## First-time setup
 
 1. **Create / open the sheet** you want to use as the database.
-2. In the sheet: **Extensions → Apps Script**.
-3. Delete the sample code, paste everything from **`Code.gs`** (in this folder), and **Save**.
-4. Near the top, change:
-   ```js
-   var SECRET_TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
-   ```
-   to your own long random string. Keep it private — anyone with the URL **and**
-   this token can read/write the data.
-5. **Deploy → New deployment**.
-   - Click the gear → **Web app**.
+2. **Extensions → Apps Script**.
+3. Delete the sample code, paste everything from **`Code.gs`** (in this folder), **Save**.
+4. Set `SECRET_TOKEN` near the top to your own long random string. It must match the
+   token built into the app (`src/services/sheetsBridge.ts` → `DEFAULT_BRIDGE_CONFIG.token`).
+5. **Deploy → New deployment** → gear → **Web app**.
    - **Execute as:** Me
    - **Who has access:** Anyone
    - **Deploy**, then approve the Google permission prompt.
-6. Copy the **Web app URL** (ends in `/exec`).
-7. In the app, sign in as Admin or Operations Manager → **Sheets Sync** button →
-   **"Use Google Sheet as the Live Database"** → paste the Web app URL and the same
-   token → **Connect**.
+6. Copy the **Web app URL** (ends in `/exec`) and put it in
+   `src/services/sheetsBridge.ts` → `DEFAULT_BRIDGE_CONFIG.webAppUrl`.
 
-That's it. From now on:
-- The app loads data from the sheet on startup.
-- Every change (sites, collectors, dispatches, equipment, transfers, users) is
-  written back to the sheet automatically (~2s debounce).
-- The sheet has readable tabs (`Sites`, `Collectors`, …) plus a hidden `_raw`
-  tab that holds the authoritative data. **Edit the readable tabs is view-only in
-  practice** — to change data, use the app, or edit `_raw` carefully.
+## Redeploying after a code change (e.g. new collections)
 
-## Updating the script later
-Apps Script → **Deploy → Manage deployments** → edit the existing deployment →
-pick the new version. This keeps the **same URL** so the app stays connected.
+The script is **collection-agnostic** — it stores the whole dataset in the hidden
+`_raw` tab and renders a readable tab for every array it finds. You still need to
+push a new version when `Code.gs` itself changes:
 
-## Security notes
-- The token is stored in the browser (localStorage) and sent with each request.
-- The `Users` tab / `_raw` contains login IDs and passwords in plain text. Restrict
-  who can open the sheet accordingly.
-- To rotate the token: change `SECRET_TOKEN`, redeploy (same deployment), then
-  reconnect in the app with the new token.
+1. Apps Script → paste the new `Code.gs`, **Save**.
+2. **Deploy → Manage deployments** → ✏️ edit the existing deployment →
+   **Version: New version** → **Deploy**.
+   The **Web app URL stays the same**, so the app keeps working.
+
+## Notes
+
+- The token is stored in the browser and shipped in the app bundle — treat it as
+  "anyone who can open the app can read/write the sheet". Rotate it by changing
+  `SECRET_TOKEN`, redeploying (same deployment), and updating `sheetsBridge.ts`.
+- The `Users` tab contains login IDs and passwords in plain text. Restrict who can
+  open the sheet.
+- Edit data through the app. The readable tabs are rebuilt from `_raw` on every save.

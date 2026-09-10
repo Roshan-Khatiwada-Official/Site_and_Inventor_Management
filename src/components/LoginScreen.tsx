@@ -172,11 +172,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         {/* Footer info */}
         <div className="mt-6 text-center text-xs text-slate-500 flex items-center justify-center gap-4">
           <span className="flex items-center gap-1">
-            <Building2 className="w-3.5 h-3.5 text-slate-600" /> Multi-Site Dispatch
+            <Building2 className="w-3.5 h-3.5 text-slate-600" /> Sites &amp; Inventory
           </span>
           <span>•</span>
           <span className="flex items-center gap-1">
-            <HardHat className="w-3.5 h-3.5 text-slate-600" /> Collector Roster
+            <HardHat className="w-3.5 h-3.5 text-slate-600" /> Data Collection Hours
           </span>
         </div>
       </div>
