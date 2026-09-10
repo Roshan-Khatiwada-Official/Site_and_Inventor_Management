@@ -66,6 +66,9 @@ function aistudioMediaPlugin(): Plugin {
 
 export default defineConfig(() => {
   return {
+    // Relative asset paths so the build works both at a domain root (Vercel)
+    // and under a sub-path (GitHub Pages project site).
+    base: './',
     plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
     resolve: {
       alias: {
