@@ -240,35 +240,27 @@ export default function App() {
 
   // ---- site handlers ----
   const saveSite = (draft: Site) => {
-    const exists = sites.some(s => s.id === draft.id);
-    if (exists) {
-      setSites(sites.map(s => (s.id === draft.id ? draft : s)));
-      showToast(`Updated site: ${draft.name}`);
-    } else {
-      setSites([...sites, draft]);
-      showToast(`Added site: ${draft.name}`);
-    }
+    setSites(prev => (prev.some(s => s.id === draft.id) ? prev.map(s => (s.id === draft.id ? draft : s)) : [...prev, draft]));
+    showToast(`Saved site: ${draft.name}`);
   };
   const deleteSite = (id: string) => {
     if (!window.confirm('Delete this site? Related assignments and requests will remain but point to a missing site.')) return;
-    setSites(sites.filter(s => s.id !== id));
+    setSites(prev => prev.filter(s => s.id !== id));
     showToast('Site deleted.');
   };
 
   // ---- inventory handlers ----
   const saveInventoryItem = (draft: InventoryItem) => {
-    const exists = inventory.some(i => i.id === draft.id);
-    setInventory(exists ? inventory.map(i => (i.id === draft.id ? draft : i)) : [...inventory, draft]);
-    showToast(exists ? `Updated item: ${draft.name}` : `Added item: ${draft.name}`);
+    setInventory(prev => (prev.some(i => i.id === draft.id) ? prev.map(i => (i.id === draft.id ? draft : i)) : [...prev, draft]));
+    showToast(`Saved item: ${draft.name}`);
   };
   const deleteInventoryItem = (id: string) => {
-    if (assignments.some(a => a.status === 'Active' && a.inventoryItemIds.includes(id))) {
-      showToast('That item is out on an assignment — check it in first.');
+    if (assignments.some(a => a.inventoryItemIds.includes(id))) {
+      showToast('That item is still out — check it in first (Returns tab).');
       return;
     }
     if (!window.confirm('Delete this inventory item?')) return;
-    setInventory(inventory.filter(i => i.id !== id));
-    setAssignments(assignments.map(a => ({ ...a, inventoryItemIds: a.inventoryItemIds.filter(x => x !== id) })));
+    setInventory(prev => prev.filter(i => i.id !== id));
     showToast('Inventory item deleted.');
   };
 
@@ -287,35 +279,42 @@ export default function App() {
 
   const saveAssignment = (draft: Assignment) => {
     const full = denormAssignment(draft);
-    const exists = assignments.some(a => a.id === full.id);
-    setAssignments(exists ? assignments.map(a => (a.id === full.id ? full : a)) : [...assignments, full]);
-    setSites(sites.map(s => (s.id === full.siteId ? { ...s, status: 'Assigned' } : s)));
-    showToast(exists ? 'Assignment updated.' : `Assigned ${full.collectorName} to ${full.siteName}.`);
+    setAssignments(prev => (prev.some(a => a.id === full.id) ? prev.map(a => (a.id === full.id ? full : a)) : [...prev, full]));
+    setSites(prev => prev.map(s => (s.id === full.siteId ? { ...s, status: 'Assigned' } : s)));
+    showToast(`Assigned ${full.collectorName} to ${full.siteName}.`);
   };
 
   const deleteAssignment = (id: string) => {
     if (!window.confirm('Delete this assignment?')) return;
-    const removed = assignments.find(a => a.id === id);
-    const rest = assignments.filter(a => a.id !== id);
-    setAssignments(rest);
-    if (removed && !rest.some(a => a.siteId === removed.siteId)) {
-      setSites(sites.map(s => (s.id === removed.siteId ? { ...s, status: 'Available' } : s)));
-    }
+    setAssignments(prev => {
+      const removed = prev.find(a => a.id === id);
+      const rest = prev.filter(a => a.id !== id);
+      if (removed && !rest.some(a => a.siteId === removed.siteId)) {
+        setSites(ps => ps.map(s => (s.id === removed.siteId ? { ...s, status: 'Available' } : s)));
+      }
+      return rest;
+    });
     showToast('Assignment deleted.');
   };
 
-  const logHours = (assignmentId: string, session: CollectionSession) => {
-    setAssignments(assignments.map(a => {
+  // Data collector: enter hours and finish the site in one action.
+  const finishAssignment = (assignmentId: string, session: CollectionSession | null) => {
+    setAssignments(prev => prev.map(a => {
       if (a.id !== assignmentId) return a;
-      const sessions = [...a.sessions, session];
-      return { ...a, sessions, hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0) };
+      const sessions = session ? [...a.sessions, session] : a.sessions;
+      return {
+        ...a,
+        sessions,
+        hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0),
+        status: 'Completed',
+      };
     }));
-    showToast(`Logged ${session.hours}h for this site.`);
+    showToast(session ? `Submitted ${session.hours}h — site marked done.` : 'Site marked done.');
   };
 
-  const setAssignmentStatus = (assignmentId: string, status: Assignment['status']) => {
-    setAssignments(assignments.map(a => (a.id === assignmentId ? { ...a, status } : a)));
-    showToast(`Assignment marked ${status}.`);
+  const reopenAssignment = (assignmentId: string) => {
+    setAssignments(prev => prev.map(a => (a.id === assignmentId ? { ...a, status: 'Active' } : a)));
+    showToast('Assignment re-opened.');
   };
 
   // Return one inventory item from an assignment, with a condition check.
@@ -329,23 +328,19 @@ export default function App() {
       note: ok ? '' : note.trim(),
       byName: currentUser?.name || 'Admin',
     };
-    setAssignments(assignments.map(a => (
+    setAssignments(prev => prev.map(a => (
       a.id === assignmentId
         ? { ...a, inventoryItemIds: a.inventoryItemIds.filter(x => x !== itemId), returnedItems: [...a.returnedItems, record] }
         : a
     )));
-    if (item) {
-      setInventory(inventory.map(i => (
-        i.id === itemId
-          ? { ...i, condition: ok ? 'OK' : 'Flagged', conditionNote: ok ? '' : note.trim() }
-          : i
-      )));
-    }
-    showToast(ok ? `Returned "${record.itemName}".` : `Returned "${record.itemName}" — flagged.`);
+    setInventory(prev => prev.map(i => (
+      i.id === itemId ? { ...i, condition: ok ? 'OK' : 'Flagged', conditionNote: ok ? '' : note.trim() } : i
+    )));
+    showToast(ok ? `Checked in "${record.itemName}".` : `Checked in "${record.itemName}" — flagged.`);
   };
 
   const clearItemFlag = (itemId: string) => {
-    setInventory(inventory.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '' } : i)));
+    setInventory(prev => prev.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '' } : i)));
     showToast('Flag cleared.');
   };
 
@@ -371,14 +366,14 @@ export default function App() {
       status: 'Pending',
       requestedAt: new Date().toISOString(),
     };
-    setRequests([...requests, req]);
+    setRequests(prev => [...prev, req]);
     showToast(`Requested "${site.name}".`);
   };
 
   const decideRequest = (requestId: string, approve: boolean, itemIds: string[] = []) => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
-    setRequests(requests.map(r => (r.id === requestId
+    setRequests(prev => prev.map(r => (r.id === requestId
       ? { ...r, status: approve ? 'Approved' : 'Rejected', decidedAt: new Date().toISOString() }
       : r)));
     if (approve) {
@@ -400,7 +395,7 @@ export default function App() {
           createdAt: todayStr(),
         });
       } else {
-        setSites(sites.map(s => (s.id === req.siteId ? { ...s, status: 'Assigned' } : s)));
+        setSites(prev => prev.map(s => (s.id === req.siteId ? { ...s, status: 'Assigned' } : s)));
       }
     }
     showToast(approve ? 'Request approved — assignment created.' : 'Request rejected.');
@@ -408,15 +403,14 @@ export default function App() {
 
   // ---- user handlers ----
   const saveUser = (draft: UserAccount) => {
-    const exists = users.some(u => u.id === draft.id);
-    setUsers(exists ? users.map(u => (u.id === draft.id ? draft : u)) : [...users, draft]);
+    setUsers(prev => (prev.some(u => u.id === draft.id) ? prev.map(u => (u.id === draft.id ? draft : u)) : [...prev, draft]));
     if (currentUser?.id === draft.id) setCurrentUser(draft);
-    showToast(exists ? `Updated ${draft.name}.` : `Created login "${draft.loginId}".`);
+    showToast(`Saved ${draft.name}.`);
   };
   const deleteUser = (id: string) => {
     if (id === currentUser?.id) { showToast("You can't delete your own account."); return; }
     if (!window.confirm('Delete this login?')) return;
-    setUsers(users.filter(u => u.id !== id));
+    setUsers(prev => prev.filter(u => u.id !== id));
     showToast('Login deleted.');
   };
 
@@ -437,11 +431,11 @@ export default function App() {
   const dataCollectors = useMemo(() => users.filter(u => u.role === 'Data Collector' && u.status === 'Active'), [users]);
   const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
 
-  // Which inventory items are currently out on an active assignment, and with whom.
+  // Which inventory items are still out (in any assignment's item list, whatever its
+  // status) — an item is only "available" again once the admin checks it in.
   const itemsOut = useMemo(() => {
     const m = new Map<string, { collectorName: string; siteName: string; assignmentId: string }>();
     assignments.forEach(a => {
-      if (a.status !== 'Active') return;
       a.inventoryItemIds.forEach(id =>
         m.set(id, { collectorName: a.collectorName, siteName: a.siteName, assignmentId: a.id })
       );
@@ -558,8 +552,8 @@ export default function App() {
             assignments={myAssignments}
             sites={sites}
             inventory={inventory}
-            onLogHours={logHours}
-            onSetStatus={setAssignmentStatus}
+            onFinish={finishAssignment}
+            onReopen={reopenAssignment}
           />
         )}
       </main>

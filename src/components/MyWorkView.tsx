@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, MapPin, Package, Plus, CheckCircle2, Briefcase } from 'lucide-react';
+import { Clock, MapPin, Package, CheckCircle2, Briefcase, AlertTriangle } from 'lucide-react';
 import { Assignment, Site, InventoryItem, CollectionSession } from '../types';
 import { todayStr } from '../utils/storage';
 
@@ -7,16 +7,16 @@ interface MyWorkViewProps {
   assignments: Assignment[];
   sites: Site[];
   inventory: InventoryItem[];
-  onLogHours: (assignmentId: string, session: CollectionSession) => void;
-  onSetStatus: (assignmentId: string, status: Assignment['status']) => void;
+  onFinish: (assignmentId: string, session: CollectionSession | null) => void;
+  onReopen: (assignmentId: string) => void;
 }
 
-export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inventory, onLogHours, onSetStatus }) => {
+export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inventory, onFinish, onReopen }) => {
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold text-slate-900">My Work</h2>
-        <p className="text-xs text-slate-500">Sites assigned to you. Log the hours of data you collect at each one.</p>
+        <p className="text-xs text-slate-500">Enter the hours of data you collected, then finish the site.</p>
       </div>
 
       {assignments.length === 0 && (
@@ -32,8 +32,8 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, inve
             a={a}
             site={sites.find(s => s.id === a.siteId)}
             inventory={inventory}
-            onLogHours={onLogHours}
-            onSetStatus={onSetStatus}
+            onFinish={onFinish}
+            onReopen={onReopen}
           />
         ))}
       </div>
@@ -45,20 +45,21 @@ const AssignmentCard: React.FC<{
   a: Assignment;
   site?: Site;
   inventory: InventoryItem[];
-  onLogHours: (id: string, s: CollectionSession) => void;
-  onSetStatus: (id: string, status: Assignment['status']) => void;
-}> = ({ a, site, inventory, onLogHours, onSetStatus }) => {
+  onFinish: (id: string, s: CollectionSession | null) => void;
+  onReopen: (id: string) => void;
+}> = ({ a, site, inventory, onFinish, onReopen }) => {
   const [hours, setHours] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(todayStr());
 
   const items = a.inventoryItemIds.map(id => inventory.find(i => i.id === id)).filter(Boolean) as InventoryItem[];
 
-  const addSession = (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const h = parseFloat(hours);
-    if (!h || h <= 0) return;
-    onLogHours(a.id, { date, hours: h, note: note.trim() || undefined });
+    const session: CollectionSession | null = h && h > 0 ? { date, hours: h, note: note.trim() || undefined } : null;
+    if (!session && !window.confirm('Finish this site with no extra hours entered?')) return;
+    onFinish(a.id, session);
     setHours(''); setNote('');
   };
 
@@ -77,7 +78,7 @@ const AssignmentCard: React.FC<{
         </div>
         <div className="text-right">
           <div className="inline-flex items-center gap-1 text-sm font-bold text-slate-800">
-            <Clock className="w-4 h-4 text-blue-500" /> {a.hoursLogged.toFixed(1)}h logged
+            <Clock className="w-4 h-4 text-blue-500" /> {a.hoursLogged.toFixed(1)}h total
           </div>
           <div className="mt-1">
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
@@ -108,35 +109,41 @@ const AssignmentCard: React.FC<{
         </div>
       )}
 
-      {a.status === 'Active' && (
-        <form onSubmit={addSession} className="mt-3 border-t border-slate-100 pt-3 flex flex-wrap items-end gap-2 text-xs">
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="px-2 py-1.5 border border-slate-300 rounded-lg" />
+      {a.status === 'Active' ? (
+        <form onSubmit={submit} className="mt-3 border-t border-slate-100 pt-3 space-y-2 text-xs">
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="px-2 py-1.5 border border-slate-300 rounded-lg" />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Hours of data collected</label>
+              <input type="number" step="0.25" min="0" value={hours} onChange={e => setHours(e.target.value)} placeholder="e.g. 3.5"
+                className="w-28 px-2 py-1.5 border border-slate-300 rounded-lg" />
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <label className="block font-semibold text-slate-600 mb-1">Note (optional)</label>
+              <input value={note} onChange={e => setNote(e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg" />
+            </div>
           </div>
-          <div>
-            <label className="block font-semibold text-slate-600 mb-1">Hours collected</label>
-            <input type="number" step="0.25" min="0" value={hours} onChange={e => setHours(e.target.value)} placeholder="e.g. 3.5"
-              className="w-24 px-2 py-1.5 border border-slate-300 rounded-lg" />
-          </div>
-          <div className="flex-1 min-w-[140px]">
-            <label className="block font-semibold text-slate-600 mb-1">Note (optional)</label>
-            <input value={note} onChange={e => setNote(e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg" />
-          </div>
-          <button type="submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg">
-            <Plus className="w-3.5 h-3.5" /> Log
-          </button>
-          <button type="button" onClick={() => onSetStatus(a.id, 'Completed')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Mark done
+          <button type="submit"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
+            <CheckCircle2 className="w-4 h-4" /> Submit hours &amp; finish site
           </button>
         </form>
-      )}
-      {a.status === 'Completed' && (
-        <button onClick={() => onSetStatus(a.id, 'Active')} className="mt-3 text-xs text-slate-500 hover:text-slate-800 underline">
-          Re-open this assignment
-        </button>
+      ) : (
+        <div className="mt-3 border-t border-slate-100 pt-3 text-xs space-y-2">
+          {items.length > 0 && (
+            <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+              <span>Return your equipment ({items.map(i => i.name).join(', ')}) to the admin so it can be checked in.</span>
+            </div>
+          )}
+          <button onClick={() => onReopen(a.id)} className="text-slate-500 hover:text-slate-800 underline">
+            Re-open this site (add more hours)
+          </button>
+        </div>
       )}
     </div>
   );
