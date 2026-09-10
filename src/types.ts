@@ -51,7 +51,18 @@ export interface InventoryItem {
   category: string;           // optional
   quantity: number;           // optional
   note: string;               // optional
+  condition: 'OK' | 'Flagged'; // set to Flagged on a problem return
+  conditionNote: string;      // what's wrong, if flagged
   createdAt: string;
+}
+
+export interface ReturnRecord {
+  itemId: string;
+  itemName: string;
+  date: string;
+  ok: boolean;                // everything in good condition?
+  note: string;               // problem description if not ok
+  byName: string;             // admin who processed the return
 }
 
 export interface CollectionSession {
@@ -74,6 +85,7 @@ export interface Assignment {
   status: AssignmentStatus;
   hoursLogged: number;        // sum of session hours
   sessions: CollectionSession[];
+  returnedItems: ReturnRecord[]; // items handed back and checked in
   createdAt: string;
 }
 

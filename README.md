@@ -38,11 +38,16 @@ Everyone signs in with an in-app **Login ID + password** (created by the Admin u
 
 **Admin**
 - **Sites** — every site, and which Site Finder added it. Add / edit / delete.
-- **Inventory** — simple item list (Item ID, Name, Category, Quantity, Note). Add / edit / delete.
-- **Assignments** — assign a Data Collector to a Site and tick the inventory items they take. Shows hours logged per assignment.
-- **Requests** — data collectors' requests for available sites. **Approve** creates an assignment (and marks the site *Assigned*); **Reject** dismisses it.
+- **Inventory** — simple item list (Item ID, Name, Category, Quantity, Note). Add / edit / delete. Items that are out show as *Out · <collector>*; a returned-with-a-problem item shows as *Flagged*.
+- **Returns** — items currently out with collectors. **Check in** opens a form ("is everything OK? camera, lens, cables, battery, body") — if not OK you add a note and the item is flagged in the inventory.
+- **Assignments** — assign a Data Collector to a Site and tick the inventory items they take. Only available (not out, not flagged) items are selectable. Shows hours logged.
+- **Requests** — data collectors' requests for available sites. **Approve** opens a picker to hand over inventory items, then creates the assignment; **Reject** dismisses it.
 - **Reports** — the numbers (see below).
 - **Logins** — create / edit / suspend / delete user logins and set their role.
+
+A data collector can only have **one open site at a time** — a pending request or an active assignment blocks new requests until that site is marked done.
+
+Site location can be set three ways: **use current location** (on site), **paste a Google Maps link**, or **search a place name**.
 
 **Site Finder**
 - **My Sites** — add and manage the sites you found. New sites start as *Available*.
@@ -66,8 +71,10 @@ Everyone signs in with an in-app **Login ID + password** (created by the Admin u
 - The Web App URL + token are built into the app, so **every device connects automatically** —
   no Google sign-in for staff.
 - The app **loads from the Sheet on startup** and **writes every change back automatically**
-  (~2 s later). One readable tab per collection (`Sites`, `Inventory`, `Assignments`,
-  `Requests`, `Users`) plus a hidden `_raw` tab that holds the authoritative copy.
+  (~2 s later), and every ~12 s it re-checks the sheet so other people's changes
+  appear on your screen automatically. One readable tab per collection (`Sites`,
+  `Inventory`, `Assignments`, `Requests`, `Users`) plus a hidden `_raw` tab that
+  holds the authoritative copy.
   **Edit data through the app, not by typing in the tabs.**
 
 ```

@@ -6,10 +6,11 @@ interface AvailableSitesViewProps {
   sites: Site[];
   myRequests: SiteRequest[];
   assignments: Assignment[];
+  hasOpenWork: boolean;
   onRequest: (siteId: string) => void;
 }
 
-export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, onRequest }) => {
+export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, hasOpenWork, onRequest }) => {
   const [q, setQ] = useState('');
   const hoursBySite = useMemo(() => {
     const m = new Map<string, number>();
@@ -31,6 +32,12 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
         <h2 className="text-lg font-bold text-slate-900">Available Sites</h2>
         <p className="text-xs text-slate-500">Sites added by Site Finders. Request the ones you want — an admin approves them.</p>
       </div>
+
+      {hasOpenWork && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2.5">
+          You have an active site right now. Finish it (mark it done in <strong>My Work</strong>) before requesting another.
+        </div>
+      )}
 
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -75,8 +82,8 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
                 ) : st === 'Approved' ? (
                   <span className="text-xs font-medium text-emerald-600">Approved — see “My Work”</span>
                 ) : (
-                  <button onClick={() => onRequest(s.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+                  <button onClick={() => onRequest(s.id)} disabled={hasOpenWork}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
                     <Send className="w-3.5 h-3.5" /> {st === 'Rejected' ? 'Request again' : 'Request this site'}
                   </button>
                 )}

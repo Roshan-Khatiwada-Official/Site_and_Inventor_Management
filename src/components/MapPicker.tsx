@@ -18,12 +18,15 @@ const pin = L.icon({
 interface MapPickerProps {
   lat: number;
   lng: number;
-  onChange: (lat: number, lng: number) => void;
+  onChange?: (lat: number, lng: number) => void;
+  /** When false the map only displays the point (no click / drag). */
+  interactive?: boolean;
+  height?: string;
 }
 
 const FALLBACK: [number, number] = [27.7172, 85.324]; // Kathmandu
 
-export const MapPicker: React.FC<MapPickerProps> = ({ lat, lng, onChange }) => {
+export const MapPicker: React.FC<MapPickerProps> = ({ lat, lng, onChange, interactive = true, height = 'h-56' }) => {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -41,10 +44,12 @@ export const MapPicker: React.FC<MapPickerProps> = ({ lat, lng, onChange }) => {
       attribution: '&copy; OpenStreetMap',
     }).addTo(map);
 
-    const marker = L.marker(start, { draggable: true, icon: pin }).addTo(map);
-    const emit = (p: any) => onChangeRef.current(Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6)));
-    marker.on('dragend', () => emit(marker.getLatLng()));
-    map.on('click', (e: any) => { marker.setLatLng(e.latlng); emit(e.latlng); });
+    const marker = L.marker(start, { draggable: interactive, icon: pin }).addTo(map);
+    if (interactive) {
+      const emit = (p: any) => onChangeRef.current?.(Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6)));
+      marker.on('dragend', () => emit(marker.getLatLng()));
+      map.on('click', (e: any) => { marker.setLatLng(e.latlng); emit(e.latlng); });
+    }
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -69,7 +74,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ lat, lng, onChange }) => {
   return (
     <div
       ref={elRef}
-      className="h-56 w-full rounded-lg overflow-hidden border border-slate-300 relative z-0"
+      className={`${height} w-full rounded-lg overflow-hidden border border-slate-300 relative z-0`}
     />
   );
 };

@@ -11,12 +11,14 @@ interface HeaderProps {
   isSyncing: boolean;
   onManualPull: () => void;
   pendingRequestCount: number;
+  outCount: number;
 }
 
 const TABS: Record<UserAccount['role'], { id: string; label: string }[]> = {
   Admin: [
     { id: 'sites', label: 'Sites' },
     { id: 'inventory', label: 'Inventory' },
+    { id: 'returns', label: 'Returns' },
     { id: 'assignments', label: 'Assignments' },
     { id: 'requests', label: 'Requests' },
     { id: 'reports', label: 'Reports' },
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSyncing,
   onManualPull,
   pendingRequestCount,
+  outCount,
 }) => {
   const tabs = TABS[currentUser.role] || [];
 
@@ -112,6 +115,11 @@ export const Header: React.FC<HeaderProps> = ({
                 {t.id === 'requests' && pendingRequestCount > 0 && (
                   <span className="bg-amber-500 text-slate-900 text-[10px] font-bold px-1.5 rounded-full">
                     {pendingRequestCount}
+                  </span>
+                )}
+                {t.id === 'returns' && outCount > 0 && (
+                  <span className="bg-slate-500 text-white text-[10px] font-bold px-1.5 rounded-full">
+                    {outCount}
                   </span>
                 )}
               </button>

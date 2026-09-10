@@ -20,6 +20,7 @@ import {
   SiteRequest,
   UserAccount,
   CollectionSession,
+  ReturnRecord,
 } from './types';
 import {
   BridgeConfig,
@@ -38,6 +39,7 @@ import { ReportsView } from './components/ReportsView';
 import { AvailableSitesView } from './components/AvailableSitesView';
 import { MyWorkView } from './components/MyWorkView';
 import { UsersView } from './components/UsersView';
+import { ReturnsView } from './components/ReturnsView';
 import { ProfileModal } from './components/ProfileModal';
 import { LoadingOverlay } from './components/LoadingOverlay';
 
@@ -260,6 +262,10 @@ export default function App() {
     showToast(exists ? `Updated item: ${draft.name}` : `Added item: ${draft.name}`);
   };
   const deleteInventoryItem = (id: string) => {
+    if (assignments.some(a => a.status === 'Active' && a.inventoryItemIds.includes(id))) {
+      showToast('That item is out on an assignment — check it in first.');
+      return;
+    }
     if (!window.confirm('Delete this inventory item?')) return;
     setInventory(inventory.filter(i => i.id !== id));
     setAssignments(assignments.map(a => ({ ...a, inventoryItemIds: a.inventoryItemIds.filter(x => x !== id) })));
@@ -312,13 +318,48 @@ export default function App() {
     showToast(`Assignment marked ${status}.`);
   };
 
+  // Return one inventory item from an assignment, with a condition check.
+  const returnInventoryItem = (assignmentId: string, itemId: string, ok: boolean, note: string) => {
+    const item = inventory.find(i => i.id === itemId);
+    const record: ReturnRecord = {
+      itemId,
+      itemName: item?.name || itemId,
+      date: todayStr(),
+      ok,
+      note: ok ? '' : note.trim(),
+      byName: currentUser?.name || 'Admin',
+    };
+    setAssignments(assignments.map(a => (
+      a.id === assignmentId
+        ? { ...a, inventoryItemIds: a.inventoryItemIds.filter(x => x !== itemId), returnedItems: [...a.returnedItems, record] }
+        : a
+    )));
+    if (item) {
+      setInventory(inventory.map(i => (
+        i.id === itemId
+          ? { ...i, condition: ok ? 'OK' : 'Flagged', conditionNote: ok ? '' : note.trim() }
+          : i
+      )));
+    }
+    showToast(ok ? `Returned "${record.itemName}".` : `Returned "${record.itemName}" — flagged.`);
+  };
+
+  const clearItemFlag = (itemId: string) => {
+    setInventory(inventory.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '' } : i)));
+    showToast('Flag cleared.');
+  };
+
   // ---- request handlers ----
+  const collectorHasOpenWork = (collectorId: string) =>
+    requests.some(r => r.collectorId === collectorId && r.status === 'Pending') ||
+    assignments.some(a => a.collectorId === collectorId && a.status === 'Active');
+
   const createRequest = (siteId: string) => {
     if (!currentUser) return;
     const site = sites.find(s => s.id === siteId);
     if (!site) return;
-    if (requests.some(r => r.siteId === siteId && r.collectorId === currentUser.id && r.status === 'Pending')) {
-      showToast('You already have a pending request for this site.');
+    if (collectorHasOpenWork(currentUser.id)) {
+      showToast('Finish your current site first — one request/site at a time.');
       return;
     }
     const req: SiteRequest = {
@@ -334,14 +375,14 @@ export default function App() {
     showToast(`Requested "${site.name}".`);
   };
 
-  const decideRequest = (requestId: string, approve: boolean) => {
+  const decideRequest = (requestId: string, approve: boolean, itemIds: string[] = []) => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
     setRequests(requests.map(r => (r.id === requestId
       ? { ...r, status: approve ? 'Approved' : 'Rejected', decidedAt: new Date().toISOString() }
       : r)));
     if (approve) {
-      const already = assignments.some(a => a.siteId === req.siteId && a.collectorId === req.collectorId);
+      const already = assignments.some(a => a.siteId === req.siteId && a.collectorId === req.collectorId && a.status === 'Active');
       if (!already) {
         saveAssignment({
           id: uid('asg'),
@@ -349,12 +390,13 @@ export default function App() {
           siteName: req.siteName,
           collectorId: req.collectorId,
           collectorName: req.collectorName,
-          inventoryItemIds: [],
+          inventoryItemIds: itemIds,
           assignedById: currentUser?.id || '',
           assignedByName: currentUser?.name || '',
           status: 'Active',
           hoursLogged: 0,
           sessions: [],
+          returnedItems: [],
           createdAt: todayStr(),
         });
       } else {
@@ -395,6 +437,21 @@ export default function App() {
   const dataCollectors = useMemo(() => users.filter(u => u.role === 'Data Collector' && u.status === 'Active'), [users]);
   const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
 
+  // Which inventory items are currently out on an active assignment, and with whom.
+  const itemsOut = useMemo(() => {
+    const m = new Map<string, { collectorName: string; siteName: string; assignmentId: string }>();
+    assignments.forEach(a => {
+      if (a.status !== 'Active') return;
+      a.inventoryItemIds.forEach(id =>
+        m.set(id, { collectorName: a.collectorName, siteName: a.siteName, assignmentId: a.id })
+      );
+    });
+    return m;
+  }, [assignments]);
+
+  const outCount = itemsOut.size;
+  const myOpenWork = currentUser ? collectorHasOpenWork(currentUser.id) : false;
+
   // ---- render gates ----
   const toastEl = toast && (
     <div className="fixed bottom-5 right-5 z-[60] bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-3 text-xs">
@@ -429,6 +486,7 @@ export default function App() {
         isSyncing={isSyncing}
         onManualPull={manualPull}
         pendingRequestCount={pendingRequestCount}
+        outCount={outCount}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
@@ -443,20 +501,30 @@ export default function App() {
           />
         )}
         {role === 'Admin' && activeTab === 'inventory' && (
-          <InventoryView inventory={inventory} onSave={saveInventoryItem} onDelete={deleteInventoryItem} />
+          <InventoryView
+            inventory={inventory}
+            itemsOut={itemsOut}
+            onSave={saveInventoryItem}
+            onDelete={deleteInventoryItem}
+            onClearFlag={clearItemFlag}
+          />
+        )}
+        {role === 'Admin' && activeTab === 'returns' && (
+          <ReturnsView assignments={assignments} inventory={inventory} onReturn={returnInventoryItem} />
         )}
         {role === 'Admin' && activeTab === 'assignments' && (
           <AssignmentsView
             assignments={assignments}
             sites={sites}
             inventory={inventory}
+            itemsOut={itemsOut}
             dataCollectors={dataCollectors}
             onSave={saveAssignment}
             onDelete={deleteAssignment}
           />
         )}
         {role === 'Admin' && activeTab === 'requests' && (
-          <RequestsView requests={requests} onDecide={decideRequest} />
+          <RequestsView requests={requests} inventory={inventory} itemsOut={itemsOut} onDecide={decideRequest} />
         )}
         {role === 'Admin' && activeTab === 'reports' && (
           <ReportsView sites={sites} assignments={assignments} users={users} />
@@ -481,6 +549,7 @@ export default function App() {
             sites={availableSites}
             myRequests={myRequests}
             assignments={assignments}
+            hasOpenWork={myOpenWork}
             onRequest={createRequest}
           />
         )}
@@ -510,7 +579,7 @@ export default function App() {
 }
 
 function roleTabIds(role: UserAccount['role']): string[] {
-  if (role === 'Admin') return ['sites', 'inventory', 'assignments', 'requests', 'reports', 'users'];
+  if (role === 'Admin') return ['sites', 'inventory', 'returns', 'assignments', 'requests', 'reports', 'users'];
   if (role === 'Site Finder') return ['mysites'];
   return ['available', 'mywork'];
 }

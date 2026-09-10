@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, LocateFixed, MapPin } from 'lucide-react';
+import { X, Building2 } from 'lucide-react';
 import { Site, UserAccount } from '../types';
 import { todayStr } from '../utils/storage';
-import { MapPicker } from './MapPicker';
+import { LocationInput } from './LocationInput';
 
 interface SiteModalProps {
   isOpen: boolean;
@@ -25,8 +25,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
   const [supervisorContact, setSupervisorContact] = useState('');
   const [workerCount, setWorkerCount] = useState<number>(0);
   const [note, setNote] = useState('');
-  const [locating, setLocating] = useState(false);
-  const [locMsg, setLocMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (site) {
@@ -48,36 +46,9 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       setWorkerCount(0);
       setNote('');
     }
-    setLocMsg(null);
   }, [site, isOpen]);
 
   if (!isOpen) return null;
-
-  const useCurrentLocation = () => {
-    if (!('geolocation' in navigator)) {
-      setLocMsg('This device does not support location.');
-      return;
-    }
-    setLocating(true);
-    setLocMsg(null);
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLatitude(Number(pos.coords.latitude.toFixed(6)));
-        setLongitude(Number(pos.coords.longitude.toFixed(6)));
-        setLocating(false);
-        setLocMsg('Location set to your current position.');
-      },
-      err => {
-        setLocating(false);
-        setLocMsg(
-          err.code === err.PERMISSION_DENIED
-            ? 'Location permission denied. Allow it and try again.'
-            : 'Could not read your location. Try again outdoors.'
-        );
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    );
-  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,39 +102,11 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
             </div>
           </div>
 
-          <div>
-            <label className="block font-semibold mb-1">Location</label>
-            <p className="text-[11px] text-slate-500 mb-2 flex items-start gap-1">
-              <MapPin className="w-3.5 h-3.5 mt-px shrink-0 text-slate-400" />
-              <span>
-                <strong>On site?</strong> Tap “Use current location”. &nbsp;
-                <strong>Remote?</strong> Tap the map or drag the pin to where the site is.
-              </span>
-            </p>
-
-            <MapPicker
-              lat={latitude}
-              lng={longitude}
-              onChange={(la, lo) => { setLatitude(la); setLongitude(lo); setLocMsg(null); }}
-            />
-
-            <div className="flex items-center gap-2 mt-2">
-              <button type="button" onClick={useCurrentLocation} disabled={locating}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-60">
-                <LocateFixed className={`w-3.5 h-3.5 ${locating ? 'animate-pulse' : ''}`} />
-                {locating ? 'Getting location…' : 'Use current location'}
-              </button>
-              <span className="text-[11px] font-mono text-slate-500">
-                {latitude || longitude ? `${Number(latitude).toFixed(5)}, ${Number(longitude).toFixed(5)}` : 'not set'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <input type="number" step="any" value={latitude} onChange={e => setLatitude(parseFloat(e.target.value) || 0)} placeholder="Latitude" className={`${field} font-mono`} />
-              <input type="number" step="any" value={longitude} onChange={e => setLongitude(parseFloat(e.target.value) || 0)} placeholder="Longitude" className={`${field} font-mono`} />
-            </div>
-            {locMsg && <p className="mt-1 text-[11px] text-slate-500">{locMsg}</p>}
-          </div>
+          <LocationInput
+            lat={latitude}
+            lng={longitude}
+            onChange={(la, lo) => { setLatitude(la); setLongitude(lo); }}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>

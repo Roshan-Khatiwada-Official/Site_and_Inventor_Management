@@ -7,13 +7,14 @@ interface AssignmentsViewProps {
   assignments: Assignment[];
   sites: Site[];
   inventory: InventoryItem[];
+  itemsOut: Map<string, { collectorName: string; siteName: string; assignmentId: string }>;
   dataCollectors: UserAccount[];
   onSave: (a: Assignment) => void;
   onDelete: (id: string) => void;
 }
 
 export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
-  assignments, sites, inventory, dataCollectors, onSave, onDelete,
+  assignments, sites, inventory, itemsOut, dataCollectors, onSave, onDelete,
 }) => {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
@@ -91,6 +92,7 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
           assignment={editing}
           sites={sites}
           inventory={inventory}
+          itemsOut={itemsOut}
           dataCollectors={dataCollectors}
           onClose={() => setOpen(false)}
           onSave={(a) => { onSave(a); setOpen(false); }}
@@ -104,10 +106,11 @@ const AssignmentModal: React.FC<{
   assignment: Assignment | null;
   sites: Site[];
   inventory: InventoryItem[];
+  itemsOut: Map<string, { collectorName: string; siteName: string; assignmentId: string }>;
   dataCollectors: UserAccount[];
   onClose: () => void;
   onSave: (a: Assignment) => void;
-}> = ({ assignment, sites, inventory, dataCollectors, onClose, onSave }) => {
+}> = ({ assignment, sites, inventory, itemsOut, dataCollectors, onClose, onSave }) => {
   const [collectorId, setCollectorId] = useState('');
   const [siteId, setSiteId] = useState('');
   const [itemIds, setItemIds] = useState<string[]>([]);
@@ -122,6 +125,14 @@ const AssignmentModal: React.FC<{
 
   const toggleItem = (id: string) =>
     setItemIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+
+  // Items that can be handed out now: not flagged, and not already out with someone else.
+  const selectableItems = inventory.filter(i => {
+    if (i.condition === 'Flagged') return false;
+    const out = itemsOut.get(i.id);
+    if (out && out.assignmentId !== assignment?.id) return false;
+    return true;
+  });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +151,7 @@ const AssignmentModal: React.FC<{
       status: assignment?.status || 'Active',
       hoursLogged: assignment?.hoursLogged || 0,
       sessions: assignment?.sessions || [],
+      returnedItems: assignment?.returnedItems || [],
       createdAt: assignment?.createdAt || todayStr(),
     });
   };
@@ -178,8 +190,8 @@ const AssignmentModal: React.FC<{
           <div>
             <label className="block font-semibold mb-1.5">Inventory items ({itemIds.length} selected)</label>
             <div className="border border-slate-200 rounded-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
-              {inventory.length === 0 && <p className="px-3 py-3 text-slate-400">No inventory items yet.</p>}
-              {inventory.map(i => (
+              {selectableItems.length === 0 && <p className="px-3 py-3 text-slate-400">No inventory items available.</p>}
+              {selectableItems.map(i => (
                 <label key={i.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
                   <input type="checkbox" checked={itemIds.includes(i.id)} onChange={() => toggleItem(i.id)} />
                   <span className="font-mono text-slate-500">{i.itemId}</span>
@@ -187,6 +199,7 @@ const AssignmentModal: React.FC<{
                 </label>
               ))}
             </div>
+            <p className="mt-1 text-[11px] text-slate-400">Items already out or flagged are hidden.</p>
           </div>
 
           <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
