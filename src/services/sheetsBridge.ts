@@ -49,8 +49,8 @@ const VALID_ROLES = ['Admin', 'Site Finder', 'Data Collector'];
 function normalize(raw: any): AppData {
   const d = raw || {};
   return {
-    sites: arr<any>(d.sites).map((s: any): Site => ({
-      id: s.id,
+    sites: arr<any>(d.sites).filter((s: any) => s && s.id).map((s: any): Site => ({
+      id: String(s.id),
       code: s.code || '',
       name: s.name || '',
       latitude: Number(s.latitude ?? s.coordinates?.lat) || 0,
@@ -64,8 +64,8 @@ function normalize(raw: any): AppData {
       status: s.status === 'Assigned' ? 'Assigned' : 'Available',
       createdAt: s.createdAt || '',
     })),
-    inventory: arr<any>(d.inventory).map((i: any): InventoryItem => ({
-      id: i.id,
+    inventory: arr<any>(d.inventory).filter((i: any) => i && i.id).map((i: any): InventoryItem => ({
+      id: String(i.id),
       itemId: i.itemId || '',
       name: i.name || '',
       category: i.category || '',
@@ -78,8 +78,8 @@ function normalize(raw: any): AppData {
       returnLog: arr<ReturnRecord>(i.returnLog),
       createdAt: i.createdAt || '',
     })),
-    assignments: arr<any>(d.assignments).map((a: any): Assignment => ({
-      id: a.id,
+    assignments: arr<any>(d.assignments).filter((a: any) => a && a.id).map((a: any): Assignment => ({
+      id: String(a.id),
       siteId: a.siteId || '',
       siteName: a.siteName || '',
       collectorId: a.collectorId || '',
@@ -91,16 +91,32 @@ function normalize(raw: any): AppData {
       sessions: arr<any>(a.sessions),
       createdAt: a.createdAt || '',
     })),
-    requests: arr<SiteRequest>(d.requests),
-    users: arr<any>(d.users).map((u: any): UserAccount => ({
-      ...u,
-      role: VALID_ROLES.includes(u.role) ? u.role : 'Data Collector',
-      status: u.status === 'Suspended' ? 'Suspended' : 'Active',
-      phone: u.phone || '',
-      email: u.email || '',
-      address: u.address || '',
-      notes: u.notes || '',
+    requests: arr<any>(d.requests).filter((r: any) => r && r.id).map((r: any): SiteRequest => ({
+      id: String(r.id),
+      siteId: r.siteId || '',
+      siteName: r.siteName || '',
+      collectorId: r.collectorId || '',
+      collectorName: r.collectorName || '',
+      status: r.status === 'Approved' ? 'Approved' : r.status === 'Rejected' ? 'Rejected' : 'Pending',
+      requestedAt: r.requestedAt || '',
+      decidedAt: r.decidedAt || undefined,
     })),
+    users: arr<any>(d.users)
+      .filter((u: any) => u && u.id && u.loginId)
+      .map((u: any): UserAccount => ({
+        id: String(u.id),
+        loginId: String(u.loginId),
+        password: u.password == null ? '' : String(u.password),
+        name: u.name || String(u.loginId),
+        role: VALID_ROLES.includes(u.role) ? u.role : 'Data Collector',
+        status: u.status === 'Suspended' ? 'Suspended' : 'Active',
+        phone: u.phone || '',
+        email: u.email || '',
+        address: u.address || '',
+        notes: u.notes || '',
+        createdAt: u.createdAt || '',
+        lastLogin: u.lastLogin || undefined,
+      })),
   };
 }
 

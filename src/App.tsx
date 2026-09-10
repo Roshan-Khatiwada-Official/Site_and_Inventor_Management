@@ -47,6 +47,15 @@ function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
+/** Union two lists by id; the local copy wins on conflict. Keeps concurrent
+ *  additions from other people instead of overwriting them. */
+function mergeById<T extends { id: string }>(remote: T[], local: T[]): T[] {
+  const map = new Map<string, T>();
+  remote.forEach(x => map.set(x.id, x));
+  local.forEach(x => map.set(x.id, x));
+  return [...map.values()];
+}
+
 export default function App() {
   // ---- data ----
   const [sites, setSites] = useState<Site[]>(() => loadStoredData('sites', INITIAL_SITES));
@@ -94,6 +103,7 @@ export default function App() {
   const bridgeReadyRef = useRef(false);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushPendingRef = useRef(false);
+  const pushSeqRef = useRef(0);             // token so a finished push doesn't clear a newer pending one
   const busyRef = useRef(false);            // a pull/push request is in flight
   const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
 
@@ -141,7 +151,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced push on local change
+  // Debounced push on local change. Before writing we pull the sheet and merge,
+  // so two people editing at the same time don't overwrite each other's rows.
   useEffect(() => {
     if (!bridgeConfig?.webAppUrl || bridgeConfig.autoSyncEnabled === false) return;
     if (!bridgeReadyRef.current || hydratingRef.current) return;
@@ -150,19 +161,46 @@ export default function App() {
     if (current === snapshotRef.current) return; // nothing actually changed
 
     pushPendingRef.current = true;
+    const mySeq = ++pushSeqRef.current;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(async () => {
       try {
         setIsSyncing(true);
         busyRef.current = true;
-        await bridgePush(bridgeConfig, { sites, inventory, assignments, requests, users });
-        snapshotRef.current = current;
+
+        let remote: AppData | null = null;
+        try { remote = await bridgePull(bridgeConfig); } catch { /* offline — push local as-is */ }
+
+        const merged: AppData = remote
+          ? {
+              sites: mergeById(remote.sites, sites),
+              inventory: mergeById(remote.inventory, inventory),
+              assignments: mergeById(remote.assignments, assignments),
+              requests: mergeById(remote.requests, requests),
+              users: mergeById(remote.users, users),
+            }
+          : { sites, inventory, assignments, requests, users };
+
+        await bridgePush(bridgeConfig, merged);
+        snapshotRef.current = snapshotOf(merged);
+
+        // adopt the merged result so other people's concurrent additions appear here
+        if (mySeq === pushSeqRef.current) {
+          hydratingRef.current = true;
+          setSites(merged.sites);
+          setInventory(merged.inventory);
+          setAssignments(merged.assignments);
+          setRequests(merged.requests);
+          setUsers(merged.users);
+          setCurrentUser(prev => (prev ? merged.users.find(u => u.id === prev.id) || prev : prev));
+          setTimeout(() => { hydratingRef.current = false; }, 0);
+        }
       } catch (err) {
         console.error('Auto-sync failed:', err);
         showToast('Auto-sync to Google Sheet failed — will retry on next change.');
       } finally {
         busyRef.current = false;
-        pushPendingRef.current = false;
+        if (mySeq === pushSeqRef.current) pushPendingRef.current = false;
         setIsSyncing(false);
       }
     }, 1200);
@@ -182,9 +220,17 @@ export default function App() {
         const d = await bridgePull(bridgeConfig);
         if (pushPendingRef.current) return; // a local edit landed while fetching
         const incoming = snapshotOf(d);
-        if (incoming !== snapshotRef.current) {
-          applySheetData(d);
-        }
+        if (incoming === snapshotRef.current) return;
+        // Merge (local wins by id) so an in-flight local edit is never dropped.
+        hydratingRef.current = true;
+        setSites(prev => mergeById(d.sites, prev));
+        setInventory(prev => mergeById(d.inventory, prev));
+        setAssignments(prev => mergeById(d.assignments, prev));
+        setRequests(prev => mergeById(d.requests, prev));
+        setUsers(prev => (d.users.length ? mergeById(d.users, prev) : prev));
+        setCurrentUser(prev => (prev ? d.users.find(u => u.id === prev.id) || prev : prev));
+        snapshotRef.current = incoming;
+        setTimeout(() => { hydratingRef.current = false; }, 0);
       } catch {
         /* transient — try again next tick */
       } finally {
@@ -244,7 +290,15 @@ export default function App() {
     showToast(`Saved site: ${draft.name}`);
   };
   const deleteSite = (id: string) => {
-    if (!window.confirm('Delete this site? Related assignments and requests will remain but point to a missing site.')) return;
+    if (assignments.some(a => a.siteId === id)) {
+      showToast('This site has assignments — it can’t be deleted.');
+      return;
+    }
+    if (requests.some(r => r.siteId === id && r.status === 'Pending')) {
+      showToast('This site has a pending request — decide on it first.');
+      return;
+    }
+    if (!window.confirm('Delete this site?')) return;
     setSites(prev => prev.filter(s => s.id !== id));
     showToast('Site deleted.');
   };
@@ -303,14 +357,14 @@ export default function App() {
 
   const deleteAssignment = (id: string) => {
     if (!window.confirm('Delete this assignment?')) return;
-    setAssignments(prev => {
-      const removed = prev.find(a => a.id === id);
-      const rest = prev.filter(a => a.id !== id);
-      if (removed && !rest.some(a => a.siteId === removed.siteId)) {
-        setSites(ps => ps.map(s => (s.id === removed.siteId ? { ...s, status: 'Available' } : s)));
+    const removed = assignments.find(a => a.id === id);
+    setAssignments(prev => prev.filter(a => a.id !== id));
+    if (removed) {
+      const siteStillUsed = assignments.some(a => a.id !== id && a.siteId === removed.siteId);
+      if (!siteStillUsed) {
+        setSites(prev => prev.map(s => (s.id === removed.siteId ? { ...s, status: 'Available' } : s)));
       }
-      return rest;
-    });
+    }
     showToast('Assignment deleted.');
   };
 
