@@ -304,8 +304,35 @@ export default function App() {
   // ---- site handlers ----
   const saveSite = (draft: Site) => {
     const s: Site = { ...draft, updatedAt: nowIso() };
+
+    // "I will collect this myself" was just ticked on an open site -> put it
+    // straight into that person's My Work instead of making them request it.
+    const selfAssigning =
+      s.reservedById &&
+      s.status === 'Available' &&
+      !assignments.some(a => a.siteId === s.id && a.collectorId === s.reservedById && a.status === 'Active');
+
+    if (selfAssigning) {
+      s.status = 'Assigned';
+      const newAsg: Assignment = {
+        id: uid('asg'),
+        siteId: s.id,
+        siteName: s.name,
+        collectorId: s.reservedById,
+        collectorName: s.reservedByName,
+        assignedById: s.reservedById,
+        assignedByName: s.reservedByName,
+        status: 'Active',
+        hoursLogged: 0,
+        sessions: [],
+        createdAt: todayStr(),
+        updatedAt: nowIso(),
+      };
+      setAssignments(prev => [...prev, newAsg]);
+    }
+
     setSites(prev => (prev.some(x => x.id === s.id) ? prev.map(x => (x.id === s.id ? s : x)) : [...prev, s]));
-    showToast(`Saved site: ${s.name}`);
+    showToast(selfAssigning ? `Added "${s.name}" to your My Work.` : `Saved site: ${s.name}`);
   };
   const deleteSite = (id: string) => {
     if (assignments.some(a => a.siteId === id)) {

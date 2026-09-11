@@ -165,7 +165,8 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
               <span>
                 <span className="font-semibold text-slate-800">I will collect this site myself</span>
                 <span className="block text-[11px] text-slate-500">
-                  Reserved for you — other collectors won't see it. Leave unchecked to put it in the shared pool.
+                  Goes straight into your My Work — no request needed, and other collectors won't see it.
+                  Leave unchecked to put it in the shared pool instead.
                 </span>
               </span>
             </label>
