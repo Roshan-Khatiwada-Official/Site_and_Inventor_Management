@@ -411,9 +411,19 @@ export default function App() {
         return;
       }
     }
-    askConfirm(`Delete "${site.name}"? This can't be undone.`, () => {
+    const relatedAssignments = assignments.filter(a => a.siteId === id).length;
+    const relatedRequests = requests.filter(r => r.siteId === id).length;
+    const extra = relatedAssignments || relatedRequests
+      ? ` This also removes ${relatedAssignments} assignment${relatedAssignments === 1 ? '' : 's'} (out of anyone's My Work) and ${relatedRequests} request${relatedRequests === 1 ? '' : 's'} tied to it.`
+      : '';
+
+    askConfirm(`Delete "${site.name}"? This can't be undone.${extra}`, () => {
       setSites(prev => prev.filter(s => s.id !== id));
-      showToast('Site deleted.');
+      // Cascade: nothing referencing this site should linger anywhere —
+      // it should look deleted from every screen, including collectors' My Work.
+      setAssignments(prev => prev.filter(a => a.siteId !== id));
+      setRequests(prev => prev.filter(r => r.siteId !== id));
+      showToast('Site deleted everywhere it was used.');
     });
   };
 
