@@ -327,6 +327,12 @@ export default function App() {
     setInventory(prev => (prev.some(i => i.id === it.id) ? prev.map(i => (i.id === it.id ? it : i)) : [...prev, it]));
     showToast(`Saved item: ${it.name}`);
   };
+  const addInventoryBatch = (items: InventoryItem[]) => {
+    const stamped = items.map(i => ({ ...i, updatedAt: nowIso() }));
+    setInventory(prev => [...prev, ...stamped]);
+    showToast(`Added ${items.length} item${items.length === 1 ? '' : 's'}.`);
+  };
+
   const deleteInventoryItem = (id: string) => {
     if (inventory.find(i => i.id === id)?.heldById) {
       showToast('That item is held by a collector — check it in first (Returns tab).');
@@ -606,7 +612,9 @@ export default function App() {
         {role === 'Admin' && activeTab === 'inventory' && (
           <InventoryView
             inventory={inventory}
+            dataCollectors={dataCollectors}
             onSave={saveInventoryItem}
+            onAddBatch={addInventoryBatch}
             onDelete={deleteInventoryItem}
             onClearFlag={clearItemFlag}
           />
