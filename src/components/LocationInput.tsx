@@ -82,7 +82,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
       </div>
 
       {/* manual + preview */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input type="number" step="any" value={lat} onChange={e => onChange(parseFloat(e.target.value) || 0, lng)} placeholder="Latitude" className={`${field} font-mono`} />
         <input type="number" step="any" value={lng} onChange={e => onChange(lat, parseFloat(e.target.value) || 0)} placeholder="Longitude" className={`${field} font-mono`} />
       </div>

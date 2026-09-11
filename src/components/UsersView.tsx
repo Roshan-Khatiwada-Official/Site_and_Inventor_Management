@@ -208,7 +208,7 @@ const UserModal: React.FC<{
         </div>
         <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700 max-h-[75vh] overflow-y-auto">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Login</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Login ID *</label>
               <input required value={loginId} onChange={e => setLoginId(e.target.value)} className={`${field} font-mono`} />
@@ -218,7 +218,7 @@ const UserModal: React.FC<{
               <input required value={password} onChange={e => setPassword(e.target.value)} className={`${field} font-mono`} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Role</label>
               <select value={role} onChange={e => setRole(e.target.value as UserRole)} className={field}>
@@ -239,7 +239,7 @@ const UserModal: React.FC<{
             <label className="block font-semibold mb-1">Full Name *</label>
             <input required autoFocus value={name} onChange={e => setName(e.target.value)} className={field} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Contact Number</label>
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. +977-98XXXXXXXX" className={field} />

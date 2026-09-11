@@ -110,7 +110,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
         </div>
 
         <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold mb-1">Site Code</label>
               <input value={code} readOnly className="w-full px-3 py-2 border border-slate-200 bg-slate-100 text-slate-500 rounded-lg text-xs font-mono uppercase cursor-not-allowed" />
@@ -136,7 +136,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
             onChange={(la, lo) => { setLatitude(la); setLongitude(lo); }}
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Site Supervisor</label>
               <input value={supervisor} onChange={e => setSupervisor(e.target.value)} placeholder="Name" className={field} />

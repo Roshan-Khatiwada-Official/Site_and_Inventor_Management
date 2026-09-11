@@ -81,7 +81,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onSav
               <label className="block font-semibold mb-1">Full Name</label>
               <input value={name} onChange={e => setName(e.target.value)} className={field} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold mb-1">Contact Number</label>
                 <input value={phone} onChange={e => setPhone(e.target.value)} className={field} />
