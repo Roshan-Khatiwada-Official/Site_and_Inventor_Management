@@ -472,16 +472,14 @@ export default function App() {
   };
 
   // ---- request handlers ----
-  const collectorHasOpenWork = (collectorId: string) =>
-    requests.some(r => r.collectorId === collectorId && r.status === 'Pending') ||
-    assignments.some(a => a.collectorId === collectorId && a.status === 'Active');
-
+  // Collectors may hold several sites at once — just no duplicate pending
+  // request for the same site.
   const createRequest = (siteId: string) => {
     if (!currentUser) return;
     const site = sites.find(s => s.id === siteId);
     if (!site) return;
-    if (collectorHasOpenWork(currentUser.id)) {
-      showToast('Finish your current site first — one site at a time.');
+    if (requests.some(r => r.siteId === siteId && r.collectorId === currentUser.id && r.status === 'Pending')) {
+      showToast('You already have a pending request for this site.');
       return;
     }
     const req: SiteRequest = {
@@ -586,8 +584,6 @@ export default function App() {
     () => (currentUser ? inventory.filter(i => i.heldById === currentUser.id) : []),
     [inventory, currentUser]
   );
-  const myOpenWork = currentUser ? collectorHasOpenWork(currentUser.id) : false;
-
   // ---- render gates ----
   const toastEl = toast && (
     <div className="fixed bottom-5 right-5 z-[60] bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-3 text-xs">
@@ -684,7 +680,7 @@ export default function App() {
             onSave={saveSite}
             onDelete={deleteSite}
             currentUser={currentUser}
-            canReserve={canCollect && !myOpenWork}
+            canReserve={canCollect}
           />
         )}
 
@@ -693,7 +689,6 @@ export default function App() {
             sites={availableSites}
             myRequests={myRequests}
             assignments={assignments}
-            hasOpenWork={myOpenWork}
             onRequest={createRequest}
             onCancelRequest={cancelRequest}
           />
