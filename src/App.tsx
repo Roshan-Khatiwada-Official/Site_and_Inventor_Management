@@ -44,6 +44,7 @@ import { UsersView } from './components/UsersView';
 import { ReturnsView } from './components/ReturnsView';
 import { ProfileModal } from './components/ProfileModal';
 import { LoadingOverlay } from './components/LoadingOverlay';
+import { ConfirmDialog, ConfirmState } from './components/ConfirmDialog';
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -81,6 +82,11 @@ export default function App() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
+  };
+
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const askConfirm = (message: string, onConfirm: () => void, opts?: Partial<ConfirmState>) => {
+    setConfirmState({ message, onConfirm, danger: true, confirmLabel: 'Delete', ...opts });
   };
 
   // Remember the open tab across refreshes; keep it valid for the current role.
@@ -335,17 +341,23 @@ export default function App() {
     showToast(selfAssigning ? `Added "${s.name}" to your My Work.` : `Saved site: ${s.name}`);
   };
   const deleteSite = (id: string) => {
-    if (assignments.some(a => a.siteId === id)) {
-      showToast('This site has assignments — it can’t be deleted.');
-      return;
+    const site = sites.find(s => s.id === id);
+    if (!site) return;
+    const isAdmin = currentUser?.role === 'Admin';
+    if (!isAdmin) {
+      if (assignments.some(a => a.siteId === id)) {
+        showToast('This site has assignments — it can’t be deleted.');
+        return;
+      }
+      if (requests.some(r => r.siteId === id && r.status === 'Pending')) {
+        showToast('This site has a pending request — decide on it first.');
+        return;
+      }
     }
-    if (requests.some(r => r.siteId === id && r.status === 'Pending')) {
-      showToast('This site has a pending request — decide on it first.');
-      return;
-    }
-    if (!window.confirm('Delete this site?')) return;
-    setSites(prev => prev.filter(s => s.id !== id));
-    showToast('Site deleted.');
+    askConfirm(`Delete "${site.name}"? This can't be undone.`, () => {
+      setSites(prev => prev.filter(s => s.id !== id));
+      showToast('Site deleted.');
+    });
   };
 
   // ---- inventory handlers ----
@@ -361,13 +373,16 @@ export default function App() {
   };
 
   const deleteInventoryItem = (id: string) => {
-    if (inventory.find(i => i.id === id)?.heldById) {
+    const item = inventory.find(i => i.id === id);
+    if (!item) return;
+    if (currentUser?.role !== 'Admin' && item.heldById) {
       showToast('That item is held by a collector — check it in first (Returns tab).');
       return;
     }
-    if (!window.confirm('Delete this inventory item?')) return;
-    setInventory(prev => prev.filter(i => i.id !== id));
-    showToast('Inventory item deleted.');
+    askConfirm(`Delete "${item.name}"? This can't be undone.`, () => {
+      setInventory(prev => prev.filter(i => i.id !== id));
+      showToast('Inventory item deleted.');
+    });
   };
 
   // Set exactly which items a data collector holds. Items they hold now but that
@@ -408,16 +423,16 @@ export default function App() {
   };
 
   const deleteAssignment = (id: string) => {
-    if (!window.confirm('Delete this assignment?')) return;
     const removed = assignments.find(a => a.id === id);
-    setAssignments(prev => prev.filter(a => a.id !== id));
-    if (removed) {
+    if (!removed) return;
+    askConfirm(`Delete the assignment for ${removed.collectorName} at ${removed.siteName}? This can't be undone.`, () => {
+      setAssignments(prev => prev.filter(a => a.id !== id));
       const siteStillUsed = assignments.some(a => a.id !== id && a.siteId === removed.siteId);
       if (!siteStillUsed) {
         setSites(prev => prev.map(s => (s.id === removed.siteId ? { ...s, status: 'Available', updatedAt: nowIso() } : s)));
       }
-    }
-    showToast('Assignment deleted.');
+      showToast('Assignment deleted.');
+    });
   };
 
   // Data collector: enter hours and finish the site in one action.
@@ -543,13 +558,16 @@ export default function App() {
   };
   const deleteUser = (id: string) => {
     if (id === currentUser?.id) { showToast("You can't delete your own account."); return; }
-    if (inventory.some(i => i.heldById === id)) {
-      showToast('Check in this collector’s equipment first (Returns tab).');
-      return;
-    }
-    if (!window.confirm('Delete this login?')) return;
-    setUsers(prev => prev.filter(u => u.id !== id));
-    showToast('Login deleted.');
+    const target = users.find(u => u.id === id);
+    if (!target) return;
+    askConfirm(`Delete the login "${target.name}"? This can't be undone.`, () => {
+      // Return any equipment they held to stock so nothing is left dangling.
+      setInventory(prev => prev.map(i => (
+        i.heldById === id ? { ...i, heldById: '', heldByName: '', updatedAt: nowIso() } : i
+      )));
+      setUsers(prev => prev.filter(u => u.id !== id));
+      showToast('Login deleted.');
+    });
   };
 
   // ---- scoped data ----
@@ -712,6 +730,7 @@ export default function App() {
         />
       )}
 
+      <ConfirmDialog state={confirmState} onCancel={() => setConfirmState(null)} />
       <LoadingOverlay show={blockingLoad !== null} label={blockingLoad || undefined} />
       {toastEl}
     </div>
