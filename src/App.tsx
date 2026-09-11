@@ -52,13 +52,34 @@ function uid(prefix: string): string {
 
 const nowIso = () => new Date().toISOString();
 
-/** Union two lists by id; the local copy wins on conflict. Keeps concurrent
- *  additions from other people instead of overwriting them. */
-function mergeById<T extends { id: string }>(remote: T[], local: T[]): T[] {
-  const map = new Map<string, T>();
-  remote.forEach(x => map.set(x.id, x));
-  local.forEach(x => map.set(x.id, x));
-  return [...map.values()];
+/**
+ * Three-way merges, using `base` (the last data we know was in the sheet) to
+ * tell a genuine delete apart from "someone else added this and I don't know
+ * about it yet". A plain union-by-id (no base) can never represent a delete —
+ * removing something locally would just have it merged back in from the sheet
+ * on the very next sync.
+ */
+
+/** For PUSHING: our local copy wins for anything we still have (add/edit);
+ *  anything we had in `base` but no longer have locally is a delete, and is
+ *  dropped even if the sheet still has it. */
+function mergeLocalIntoRemote<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
+  const baseIds = new Set(base.map(x => x.id));
+  const localIds = new Set(local.map(x => x.id));
+  const result = new Map<string, T>(remote.map(x => [x.id, x]));
+  baseIds.forEach(id => { if (!localIds.has(id)) result.delete(id); }); // our deletions
+  local.forEach(x => result.set(x.id, x)); // our adds/edits win
+  return [...result.values()];
+}
+
+/** For POLLING: the sheet is trusted (so other people's deletes reach us
+ *  too); we only keep local rows that are brand new and not yet synced. */
+function mergeRemoteIntoLocal<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
+  const baseIds = new Set(base.map(x => x.id));
+  const remoteIds = new Set(remote.map(x => x.id));
+  const result = new Map<string, T>(remote.map(x => [x.id, x]));
+  local.forEach(x => { if (!baseIds.has(x.id) && !remoteIds.has(x.id)) result.set(x.id, x); });
+  return [...result.values()];
 }
 
 export default function App() {
@@ -116,6 +137,20 @@ export default function App() {
   const pushSeqRef = useRef(0);             // token so a finished push doesn't clear a newer pending one
   const busyRef = useRef(false);            // a pull/push request is in flight
   const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
+  const lastSyncedRef = useRef<AppData | null>(null); // last data confirmed in the sheet (merge base)
+
+  // Always-fresh mirrors of state, so a merge running after a debounce/await
+  // sees edits made in the meantime instead of a stale closure.
+  const sitesRef = useRef(sites);
+  const inventoryRef = useRef(inventory);
+  const assignmentsRef = useRef(assignments);
+  const requestsRef = useRef(requests);
+  const usersRef = useRef(users);
+  useEffect(() => { sitesRef.current = sites; }, [sites]);
+  useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
+  useEffect(() => { assignmentsRef.current = assignments; }, [assignments]);
+  useEffect(() => { requestsRef.current = requests; }, [requests]);
+  useEffect(() => { usersRef.current = users; }, [users]);
 
   const POLL_MS = 6000;
 
@@ -133,6 +168,7 @@ export default function App() {
       setCurrentUser(prev => (prev ? d.users.find(u => u.id === prev.id) || null : null));
     }
     snapshotRef.current = snapshotOf(d);
+    lastSyncedRef.current = d;
     setTimeout(() => { hydratingRef.current = false; }, 0);
   };
 
@@ -182,18 +218,27 @@ export default function App() {
         let remote: AppData | null = null;
         try { remote = await bridgePull(bridgeConfig); } catch { /* offline — push local as-is */ }
 
+        const base = lastSyncedRef.current;
+        const localNow: AppData = {
+          sites: sitesRef.current,
+          inventory: inventoryRef.current,
+          assignments: assignmentsRef.current,
+          requests: requestsRef.current,
+          users: usersRef.current,
+        };
         const merged: AppData = remote
           ? {
-              sites: mergeById(remote.sites, sites),
-              inventory: mergeById(remote.inventory, inventory),
-              assignments: mergeById(remote.assignments, assignments),
-              requests: mergeById(remote.requests, requests),
-              users: mergeById(remote.users, users),
+              sites: mergeLocalIntoRemote(remote.sites, localNow.sites, base?.sites || []),
+              inventory: mergeLocalIntoRemote(remote.inventory, localNow.inventory, base?.inventory || []),
+              assignments: mergeLocalIntoRemote(remote.assignments, localNow.assignments, base?.assignments || []),
+              requests: mergeLocalIntoRemote(remote.requests, localNow.requests, base?.requests || []),
+              users: mergeLocalIntoRemote(remote.users, localNow.users, base?.users || []),
             }
-          : { sites, inventory, assignments, requests, users };
+          : localNow;
 
         await bridgePush(bridgeConfig, merged);
         snapshotRef.current = snapshotOf(merged);
+        lastSyncedRef.current = merged;
 
         // adopt the merged result so other people's concurrent additions appear here
         if (mySeq === pushSeqRef.current) {
@@ -233,16 +278,28 @@ export default function App() {
         if (pushPendingRef.current) return; // a local edit landed while fetching
         const incoming = snapshotOf(d);
         if (incoming === snapshotRef.current) return;
-        // Merge (local wins by id) so an in-flight local edit is never dropped.
+        // The sheet is trusted here (so other people's deletes reach us too);
+        // only truly-new, not-yet-synced local rows are preserved.
+        const base = lastSyncedRef.current;
+        const merged: AppData = {
+          sites: mergeRemoteIntoLocal(d.sites, sitesRef.current, base?.sites || []),
+          inventory: mergeRemoteIntoLocal(d.inventory, inventoryRef.current, base?.inventory || []),
+          assignments: mergeRemoteIntoLocal(d.assignments, assignmentsRef.current, base?.assignments || []),
+          requests: mergeRemoteIntoLocal(d.requests, requestsRef.current, base?.requests || []),
+          users: d.users.length ? mergeRemoteIntoLocal(d.users, usersRef.current, base?.users || []) : usersRef.current,
+        };
         setBlockingLoad('Updating…');
         hydratingRef.current = true;
-        setSites(prev => mergeById(d.sites, prev));
-        setInventory(prev => mergeById(d.inventory, prev));
-        setAssignments(prev => mergeById(d.assignments, prev));
-        setRequests(prev => mergeById(d.requests, prev));
-        setUsers(prev => (d.users.length ? mergeById(d.users, prev) : prev));
-        setCurrentUser(prev => (prev ? d.users.find(u => u.id === prev.id) || prev : prev));
+        setSites(merged.sites);
+        setInventory(merged.inventory);
+        setAssignments(merged.assignments);
+        setRequests(merged.requests);
+        setUsers(merged.users);
+        setCurrentUser(prev => (prev ? merged.users.find(u => u.id === prev.id) || prev : prev));
+        // Base = what the sheet actually has right now (not the merged local view,
+        // which may still contain not-yet-synced local additions).
         snapshotRef.current = incoming;
+        lastSyncedRef.current = d;
         setTimeout(() => { hydratingRef.current = false; setBlockingLoad(null); }, 350);
       } catch {
         /* transient — try again next tick */
