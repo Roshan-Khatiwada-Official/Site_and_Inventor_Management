@@ -144,6 +144,7 @@ const InventoryModal: React.FC<{
   const [quantity, setQuantity] = useState<number>(1);
   const [note, setNote] = useState('');
   const [assignTo, setAssignTo] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (item) {
@@ -155,7 +156,9 @@ const InventoryModal: React.FC<{
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemId.trim() || !name.trim()) return;
+    setError(null);
+    if (!itemId.trim()) { setError('Item ID is required.'); return; }
+    if (!name.trim()) { setError('Name is required.'); return; }
     const collector = dataCollectors.find(c => c.id === assignTo);
     onSave({
       id: item ? item.id : `inv-${Date.now()}`,
@@ -177,16 +180,16 @@ const InventoryModal: React.FC<{
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><Package className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">{item ? 'Edit Item' : 'Add Inventory Item'}</h3>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold mb-1">Item ID *</label>
@@ -217,7 +220,10 @@ const InventoryModal: React.FC<{
             <label className="block font-semibold mb-1">Note</label>
             <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="optional" className={field} />
           </div>
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">{item ? 'Save' : 'Add'}</button>
           </div>
@@ -286,16 +292,16 @@ const SequentialModal: React.FC<{
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-slate-800 text-white flex items-center justify-center"><ListPlus className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">Add Sequential Items</h3>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <p className="text-slate-500">Creates one item per number, e.g. <code className="bg-slate-100 px-1 py-0.5 rounded">NP_001 … NP_010</code>.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -345,9 +351,9 @@ const SequentialModal: React.FC<{
             <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="optional, applied to every item" className={field} />
           </div>
 
-          {error && <p className="text-rose-600 text-[11px]">{error}</p>}
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">
               Create {ids.length || ''} items

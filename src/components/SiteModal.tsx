@@ -29,6 +29,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
   const [supervisorContact, setSupervisorContact] = useState('');
   const [workerCount, setWorkerCount] = useState<number>(0);
   const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (site) {
@@ -60,7 +61,8 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    setError(null);
+    if (!name.trim()) { setError('Site Name is required.'); return; }
 
     let reservedById = site ? site.reservedById : '';
     let reservedByName = site ? site.reservedByName : '';
@@ -95,9 +97,9 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
               <Building2 className="w-4 h-4" />
@@ -109,7 +111,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
           </button>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold mb-1">Site Code</label>
@@ -169,7 +171,9 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
             </label>
           )}
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">{site ? 'Save' : 'Add Site'}</button>
           </div>

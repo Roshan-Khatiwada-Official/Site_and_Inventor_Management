@@ -113,6 +113,7 @@ const AssignmentModal: React.FC<{
 }> = ({ assignment, sites, dataCollectors, kitOf, onClose, onSave }) => {
   const [collectorId, setCollectorId] = useState('');
   const [siteId, setSiteId] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (assignment) { setCollectorId(assignment.collectorId); setSiteId(assignment.siteId); }
@@ -120,7 +121,9 @@ const AssignmentModal: React.FC<{
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!collectorId || !siteId) return;
+    setError(null);
+    if (!collectorId) { setError('Choose a Data Collector.'); return; }
+    if (!siteId) { setError('Choose a Site.'); return; }
     const site = sites.find(s => s.id === siteId);
     const collector = dataCollectors.find(c => c.id === collectorId);
     onSave({
@@ -143,9 +146,9 @@ const AssignmentModal: React.FC<{
   const kit = collectorId ? kitOf(collectorId) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><ClipboardList className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">{assignment ? 'Edit Assignment' : 'New Assignment'}</h3>
@@ -153,7 +156,7 @@ const AssignmentModal: React.FC<{
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <div>
             <label className="block font-semibold mb-1">Data Collector *</label>
             <select required value={collectorId} onChange={e => setCollectorId(e.target.value)} className={field}>
@@ -188,7 +191,9 @@ const AssignmentModal: React.FC<{
             </div>
           )}
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">{assignment ? 'Save' : 'Assign'}</button>
           </div>

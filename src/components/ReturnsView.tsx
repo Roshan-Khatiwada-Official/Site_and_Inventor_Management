@@ -108,9 +108,9 @@ const ReturnModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><PackageCheck className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">Check in item</h3>
@@ -118,7 +118,7 @@ const ReturnModal: React.FC<{
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <p>
             Returning <strong className="text-slate-900">{item.name}</strong>
             <span className="font-mono text-slate-400"> · {item.itemId}</span> from{' '}
@@ -150,7 +150,9 @@ const ReturnModal: React.FC<{
             </div>
           )}
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          {ok === null && <p className="text-rose-600 text-[11px] font-medium">Choose Yes or No above before confirming.</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" disabled={ok === null || (ok === false && !note.trim())}
               className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm disabled:opacity-40">

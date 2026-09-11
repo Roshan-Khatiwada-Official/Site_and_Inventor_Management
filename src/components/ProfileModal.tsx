@@ -44,9 +44,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onSav
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold">
               {user.name.charAt(0).toUpperCase()}
@@ -62,7 +62,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onSav
         </div>
 
         {!editing ? (
-          <div className="p-6 text-xs text-slate-700">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 text-xs text-slate-700">
             <Row icon={<User className="w-3.5 h-3.5" />} label="Login ID" value={user.loginId} />
             <Row icon={<Phone className="w-3.5 h-3.5" />} label="Contact Number" value={user.phone || ''} />
             <Row icon={<Mail className="w-3.5 h-3.5" />} label="Email" value={user.email || ''} />
@@ -70,13 +70,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onSav
             <Row icon={<StickyNote className="w-3.5 h-3.5" />} label="Notes" value={user.notes || ''} />
             <Row icon={<Clock className="w-3.5 h-3.5" />} label="Last login" value={user.lastLogin ? new Date(user.lastLogin).toLocaleString() : ''} />
 
-            <div className="pt-4 flex justify-end gap-2">
+            <div className="pt-4 flex justify-end gap-2 sticky bottom-0 bg-white -mx-6 px-6 pb-1">
               <button onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Close</button>
               <button onClick={() => setEditing(true)} className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">Edit my details</button>
             </div>
           </div>
         ) : (
-          <form onSubmit={save} className="p-6 space-y-4 text-xs text-slate-700">
+          <form onSubmit={save} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
             <div>
               <label className="block font-semibold mb-1">Full Name</label>
               <input value={name} onChange={e => setName(e.target.value)} className={field} />
@@ -103,7 +103,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onSav
               <label className="flex items-center gap-1.5 font-semibold mb-1"><KeyRound className="w-3.5 h-3.5 text-slate-400" /> Password</label>
               <input value={password} onChange={e => setPassword(e.target.value)} className={`${field} font-mono`} />
             </div>
-            <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+            <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
               <button type="button" onClick={() => setEditing(false)} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
               <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">Save</button>
             </div>

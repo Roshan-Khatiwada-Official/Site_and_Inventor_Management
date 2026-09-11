@@ -122,9 +122,9 @@ const KitModal: React.FC<{
   const pickedItems = picked.map(id => inventory.find(i => i.id === id)).filter(Boolean) as InventoryItem[];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><Package className="w-4 h-4" /></div>
             <div>
@@ -135,7 +135,7 @@ const KitModal: React.FC<{
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="p-6 space-y-4 text-xs text-slate-700">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           {/* Assigning to (running list) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -181,13 +181,13 @@ const KitModal: React.FC<{
           </div>
 
           <p className="text-[11px] text-slate-400">Removing an item here just returns it to stock — no condition check. Use the Returns tab when equipment physically comes back.</p>
+        </div>
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
-            <button onClick={() => onSave(picked)} className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">
-              Assign ({pickedItems.length})
-            </button>
-          </div>
+        <div className="shrink-0 sticky bottom-0 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
+          <button onClick={() => onSave(picked)} className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">
+            Assign ({pickedItems.length})
+          </button>
         </div>
       </div>
     </div>
@@ -211,6 +211,7 @@ const UserModal: React.FC<{
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [kitOpen, setKitOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -223,7 +224,10 @@ const UserModal: React.FC<{
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !loginId.trim() || !password.trim()) return;
+    setError(null);
+    if (!name.trim()) { setError('Full Name is required.'); return; }
+    if (!loginId.trim()) { setError('Login ID is required.'); return; }
+    if (!password.trim()) { setError('Password is required.'); return; }
     onSave({
       id: user ? user.id : `usr-${Date.now()}`,
       name: name.trim(),
@@ -245,16 +249,16 @@ const UserModal: React.FC<{
   const kitCount = user ? inventory.filter(i => i.heldById === user.id).length : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><ShieldCheck className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">{user ? 'Edit Login' : 'Add Login'}</h3>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="p-6 space-y-4 text-xs text-slate-700 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Login</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -321,7 +325,9 @@ const UserModal: React.FC<{
             </p>
           )}
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
             <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">{user ? 'Save' : 'Create'}</button>
           </div>
