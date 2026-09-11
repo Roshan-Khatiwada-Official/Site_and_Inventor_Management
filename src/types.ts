@@ -41,6 +41,7 @@ export const SITE_CATEGORIES = [
   'Barber shop',
   'Welding (CNC cutting, full object making process)',
   'Construction marble layout / plumbing etc',
+  'Automobiles repair',
 ] as const;
 
 export interface Site {
