@@ -583,6 +583,29 @@ export default function App() {
     showToast('Assignment re-opened.');
   };
 
+  // Data collector: fix a mistake in a session they logged themselves. Locked once admin has verified it.
+  const updateSessionEntry = (assignmentId: string, sessionId: string, updates: Partial<Pick<CollectionSession, 'date' | 'hours' | 'task' | 'cameraId' | 'cameraName' | 'cameraItemId'>>) => {
+    setAssignments(prev => prev.map(a => {
+      if (a.id !== assignmentId) return a;
+      const sessions = a.sessions.map(s => (s.id === sessionId && s.actualHours == null ? { ...s, ...updates } : s));
+      return { ...a, sessions, hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0), updatedAt: nowIso() };
+    }));
+    showToast('Entry updated.');
+  };
+
+  const deleteSessionEntry = (assignmentId: string, sessionId: string) => {
+    askConfirm('Delete this hours entry? This can\'t be undone.', () => {
+      setAssignments(prev => prev.map(a => {
+        if (a.id !== assignmentId) return a;
+        const target = a.sessions.find(s => s.id === sessionId);
+        if (!target || target.actualHours != null) return a;
+        const sessions = a.sessions.filter(s => s.id !== sessionId);
+        return { ...a, sessions, hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0), updatedAt: nowIso() };
+      }));
+      showToast('Entry deleted.');
+    });
+  };
+
   // Admin verifies the actual hours collected for one logged entry, alongside
   // what the collector originally entered. The entry's date never changes —
   // verification can happen any day after it was logged.
@@ -869,6 +892,8 @@ export default function App() {
             onSubmitHours={submitHours}
             onFinish={finishAssignment}
             onReopen={reopenAssignment}
+            onUpdateSession={updateSessionEntry}
+            onDeleteSession={deleteSessionEntry}
           />
         )}
       </main>

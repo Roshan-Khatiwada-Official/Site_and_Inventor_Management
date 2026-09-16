@@ -12,9 +12,11 @@ interface MyWorkViewProps {
   onSubmitHours: (assignmentId: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onFinish: (assignmentId: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (assignmentId: string) => void;
+  onUpdateSession: (assignmentId: string, sessionId: string, updates: Partial<Pick<CollectionSession, 'date' | 'hours' | 'task' | 'cameraId' | 'cameraName' | 'cameraItemId'>>) => void;
+  onDeleteSession: (assignmentId: string, sessionId: string) => void;
 }
 
-export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKit, onSubmitHours, onFinish, onReopen }) => {
+export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKit, onSubmitHours, onFinish, onReopen, onUpdateSession, onDeleteSession }) => {
   return (
     <div className="space-y-4">
       <div>
@@ -56,6 +58,8 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKi
             onSubmitHours={onSubmitHours}
             onFinish={onFinish}
             onReopen={onReopen}
+            onUpdateSession={onUpdateSession}
+            onDeleteSession={onDeleteSession}
           />
         ))}
       </div>
@@ -75,10 +79,31 @@ const AssignmentCard: React.FC<{
   onSubmitHours: (id: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onFinish: (id: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (id: string) => void;
-}> = ({ a, site, myKit, onSubmitHours, onFinish, onReopen }) => {
+  onUpdateSession: (assignmentId: string, sessionId: string, updates: Partial<Pick<CollectionSession, 'date' | 'hours' | 'task' | 'cameraId' | 'cameraName' | 'cameraItemId'>>) => void;
+  onDeleteSession: (assignmentId: string, sessionId: string) => void;
+}> = ({ a, site, myKit, onSubmitHours, onFinish, onReopen, onUpdateSession, onDeleteSession }) => {
   const [date, setDate] = useState(todayStr());
   const [selectedCameraIds, setSelectedCameraIds] = useState<string[]>([]);
   const [rowsByCamera, setRowsByCamera] = useState<Record<string, TaskRow[]>>({});
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ date: string; hours: string; task: string; cameraId: string }>({ date: '', hours: '', task: '', cameraId: '' });
+
+  const startEdit = (s: CollectionSession) => {
+    setEditingSessionId(s.id);
+    setEditDraft({ date: s.date, hours: String(s.hours), task: s.task || '', cameraId: s.cameraId || '' });
+  };
+  const cancelEdit = () => setEditingSessionId(null);
+  const saveEdit = (assignmentId: string) => {
+    if (!editingSessionId) return;
+    const h = parseFloat(editDraft.hours);
+    if (!h || h <= 0) { window.alert('Enter valid hours.'); return; }
+    const cam = myKit.find(i => i.id === editDraft.cameraId);
+    onUpdateSession(assignmentId, editingSessionId, {
+      date: editDraft.date, hours: h, task: editDraft.task.trim() || undefined,
+      cameraId: cam?.id, cameraName: cam?.name, cameraItemId: cam?.itemId,
+    });
+    setEditingSessionId(null);
+  };
   // Only the tasks belonging to this site's own field/category — not the whole masterlist.
   const siteTasks = site ? TASKS_BY_CATEGORY[site.category] || [] : [];
 
@@ -169,20 +194,71 @@ const AssignmentCard: React.FC<{
       </div>
 
       {a.sessions.length > 0 && (
-        <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 space-y-0.5">
-          {a.sessions.map((s, idx) => (
-            <div key={idx} className="flex justify-between gap-2">
-              <span>
-                {s.date}
-                {s.cameraItemId ? ` — ${s.cameraItemId}` : (s.cameraName ? ` — ${s.cameraName}` : '')}
-                {s.task ? ` · ${s.task}` : ''}
-                {!s.cameraName && s.note ? ` — ${s.note}` : ''}
-              </span>
-              <span className="font-medium text-slate-700 shrink-0">
-                {s.hours}h{s.actualHours != null ? <span className="text-emerald-600"> / {s.actualHours}h actual</span> : ''}
-              </span>
-            </div>
-          ))}
+        <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 space-y-1">
+          {a.sessions.map((s) => {
+            const locked = s.actualHours != null;
+            if (editingSessionId === s.id) {
+              return (
+                <div key={s.id} className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-slate-500 mb-0.5">Date</label>
+                    <input type="date" value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))}
+                      className="px-1.5 py-1 border border-slate-300 rounded bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 mb-0.5">Camera</label>
+                    <select value={editDraft.cameraId} onChange={e => setEditDraft(d => ({ ...d, cameraId: e.target.value }))}
+                      className="px-1.5 py-1 border border-slate-300 rounded bg-white">
+                      <option value="">—</option>
+                      {myKit.map(cam => <option key={cam.id} value={cam.id}>{cam.itemId}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-slate-500 mb-0.5">Task</label>
+                    <select value={editDraft.task} onChange={e => setEditDraft(d => ({ ...d, task: e.target.value }))}
+                      className="w-full px-1.5 py-1 border border-slate-300 rounded bg-white">
+                      <option value="">— none —</option>
+                      {siteTasks.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-500 mb-0.5">Hours</label>
+                    <input type="number" step="0.25" min="0" value={editDraft.hours} onChange={e => setEditDraft(d => ({ ...d, hours: e.target.value }))}
+                      className="w-20 px-1.5 py-1 border border-slate-300 rounded bg-white" />
+                  </div>
+                  <button type="button" onClick={() => saveEdit(a.id)}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded">Save</button>
+                  <button type="button" onClick={cancelEdit}
+                    className="px-2.5 py-1 text-slate-500 hover:text-slate-800">Cancel</button>
+                </div>
+              );
+            }
+            return (
+              <div key={s.id} className="flex justify-between items-center gap-2">
+                <span>
+                  {s.date}
+                  {s.cameraItemId ? ` — ${s.cameraItemId}` : (s.cameraName ? ` — ${s.cameraName}` : '')}
+                  {s.task ? ` · ${s.task}` : ''}
+                  {!s.cameraName && s.note ? ` — ${s.note}` : ''}
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="font-medium text-slate-700">
+                    {s.hours}h{s.actualHours != null ? <span className="text-emerald-600"> / {s.actualHours}h actual</span> : ''}
+                  </span>
+                  {locked ? (
+                    <span className="text-[10px] text-slate-400">verified</span>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => startEdit(s)}
+                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-700">Edit</button>
+                      <button type="button" onClick={() => onDeleteSession(a.id, s.id)}
+                        className="text-[11px] font-semibold text-rose-600 hover:text-rose-700">Delete</button>
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
