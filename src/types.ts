@@ -122,6 +122,7 @@ export interface CollectionSession {
   note?: string;               // legacy free-form note
   cameraId?: string;           // inventory item id of the camera used
   cameraName?: string;         // denormalised
+  cameraItemId?: string;       // denormalised human-readable camera code (cameras often share the same name)
   task?: string;                // task performed with that camera on that date
 }
 

@@ -115,7 +115,7 @@ const AssignmentCard: React.FC<{
       (rowsByCamera[camId] || []).forEach(row => {
         const h = parseFloat(row.hours);
         if (h && h > 0) {
-          sessions.push({ date, hours: h, task: row.task.trim() || undefined, cameraId: camId, cameraName: cam?.name });
+          sessions.push({ date, hours: h, task: row.task.trim() || undefined, cameraId: camId, cameraName: cam?.name, cameraItemId: cam?.itemId });
         }
       });
     });
@@ -158,7 +158,7 @@ const AssignmentCard: React.FC<{
             <div key={idx} className="flex justify-between gap-2">
               <span>
                 {s.date}
-                {s.cameraName ? ` — ${s.cameraName}` : ''}
+                {s.cameraItemId ? ` — ${s.cameraItemId}` : (s.cameraName ? ` — ${s.cameraName}` : '')}
                 {s.task ? ` · ${s.task}` : ''}
                 {!s.cameraName && s.note ? ` — ${s.note}` : ''}
               </span>
@@ -191,7 +191,7 @@ const AssignmentCard: React.FC<{
                         ? 'bg-blue-600 border-blue-600 text-white'
                         : 'bg-white border-slate-300 text-slate-600 hover:border-blue-400'
                     }`}>
-                    <Camera className="w-3 h-3" /> {cam.name}
+                    <Camera className="w-3 h-3" /> {cam.itemId}
                   </button>
                 ))}
               </div>
@@ -203,7 +203,7 @@ const AssignmentCard: React.FC<{
             const rows = rowsByCamera[camId] || [];
             return (
               <div key={camId} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                <div className="font-semibold text-slate-700 flex items-center gap-1"><Camera className="w-3.5 h-3.5 text-blue-500" /> {cam?.name}</div>
+                <div className="font-semibold text-slate-700 flex items-center gap-1"><Camera className="w-3.5 h-3.5 text-blue-500" /> {cam?.itemId}</div>
                 {rows.map((row, idx) => (
                   <div key={idx} className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[180px]">
