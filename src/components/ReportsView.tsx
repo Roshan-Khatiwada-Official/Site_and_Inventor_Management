@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Users, Building2, Clock, Search as SearchIcon } from 'lucide-react';
-import { Assignment, Site, UserAccount } from '../types';
+import { Assignment, Site, UserAccount, CAN_COLLECT } from '../types';
 import { actualHoursOf } from '../utils/collectionReport';
 
 interface ReportsViewProps {
@@ -14,7 +14,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
   const [siteFilter, setSiteFilter] = useState('');
   const [q, setQ] = useState('');
 
-  const dataCollectors = users.filter(u => u.role === 'Data Collector');
+  const dataCollectors = users.filter(u => CAN_COLLECT.includes(u.role));
   const siteFinders = users.filter(u => u.role === 'Site Finder');
   const siteById = useMemo(() => new Map(sites.map(s => [s.id, s])), [sites]);
 
@@ -87,11 +87,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-slate-900">Reports</h2>
-        <p className="text-xs text-slate-500">Collection hours by data collector and site, and which Site Finder found each site.</p>
+        <p className="text-xs text-slate-500">Collection hours by field worker and site, and which Site Finder found each site.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stat(<Users className="w-3.5 h-3.5" />, 'Data Collectors', dataCollectors.length)}
+        {stat(<Users className="w-3.5 h-3.5" />, 'Field Workers', dataCollectors.length)}
         {stat(<Building2 className="w-3.5 h-3.5" />, 'Sites', sites.length)}
         {stat(<Clock className="w-3.5 h-3.5" />, 'Total Hours (entered / actual)', `${totalHours.toFixed(1)} / ${totalActualHours.toFixed(1)}`)}
         {stat(<Users className="w-3.5 h-3.5" />, 'Site Finders', siteFinders.length)}
@@ -106,7 +106,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
         </div>
         <select value={collectorFilter} onChange={e => setCollectorFilter(e.target.value)}
           className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white">
-          <option value="">All data collectors</option>
+          <option value="">All field workers</option>
           {dataCollectors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}
@@ -122,7 +122,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500 text-left">
-              <tr><th className={th}>Data Collector</th><th className={th}>Site</th><th className={th}>Found by</th><th className={th}>Hours (entered / actual)</th><th className={th}>Sessions</th><th className={th}>Status</th></tr>
+              <tr><th className={th}>Field Worker</th><th className={th}>Site</th><th className={th}>Found by</th><th className={th}>Hours (entered / actual)</th><th className={th}>Sessions</th><th className={th}>Status</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No data.</td></tr>}
@@ -165,10 +165,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
 
         {/* per collector */}
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-slate-100 text-xs font-bold text-slate-700">Total hours per data collector</div>
+          <div className="px-4 py-2.5 border-b border-slate-100 text-xs font-bold text-slate-700">Total hours per field worker</div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500 text-left"><tr><th className={th}>Data Collector</th><th className={th}>Sites</th><th className={th}>Total hours (entered / actual)</th></tr></thead>
+              <thead className="bg-slate-50 text-slate-500 text-left"><tr><th className={th}>Field Worker</th><th className={th}>Sites</th><th className={th}>Total hours (entered / actual)</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {perCollector.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400">No data.</td></tr>}
                 {perCollector.map((c, i) => (
