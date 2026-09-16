@@ -1,22 +1,32 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, MapPin, Search, Lock } from 'lucide-react';
-import { Site, UserAccount } from '../types';
+import { Plus, Pencil, Trash2, MapPin, Search, Lock, CheckCircle2, XCircle } from 'lucide-react';
+import { Assignment, Site, UserAccount } from '../types';
 import { SiteModal } from './SiteModal';
+import { SiteDetailModal } from './SiteDetailModal';
 import { byNewest } from '../utils/storage';
 
 interface SitesViewProps {
   mode: 'admin' | 'finder';
   sites: Site[];
   users: UserAccount[];
+  assignments: Assignment[];
   currentUser: UserAccount;
   canReserve?: boolean;
   onSave: (site: Site) => void;
   onDelete: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
 }
 
-export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, canReserve, onSave, onDelete }) => {
+const statusBadge: Record<Site['status'], string> = {
+  Available: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  'Pending Approval': 'bg-amber-50 text-amber-700 border border-amber-200',
+};
+
+export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, assignments, currentUser, canReserve, onSave, onDelete, onApprove, onReject }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
+  const [detailSite, setDetailSite] = useState<Site | null>(null);
   const [q, setQ] = useState('');
 
   const filtered = sites.filter(s => {
@@ -76,7 +86,7 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
                 <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">No sites yet.</td></tr>
               )}
               {filtered.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50">
+                <tr key={s.id} onClick={() => setDetailSite(s)} className="hover:bg-slate-50 cursor-pointer">
                   <td className="px-4 py-2.5 font-mono text-slate-500">{s.code}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-900">
                     {s.name}
@@ -107,13 +117,21 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
                   <td className="px-4 py-2.5 text-slate-600">{s.workerCount}</td>
                   {mode === 'admin' && <td className="px-4 py-2.5 text-slate-600">{s.foundByName || '—'}</td>}
                   <td className="px-4 py-2.5">
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                      s.status === 'Available'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-slate-100 text-slate-600 border border-slate-200'
-                    }`}>{s.status}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${statusBadge[s.status]}`}>{s.status}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                    {mode === 'admin' && s.status === 'Pending Approval' && onApprove && (
+                      <button onClick={() => onApprove(s.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 mr-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                      </button>
+                    )}
+                    {mode === 'admin' && s.status === 'Pending Approval' && onReject && (
+                      <button onClick={() => onReject(s.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 mr-1 text-[11px] font-semibold bg-white border border-rose-300 text-rose-600 hover:bg-rose-50 rounded-md">
+                        <XCircle className="w-3.5 h-3.5" /> Cancel approval
+                      </button>
+                    )}
                     <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -135,6 +153,13 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, currentUser, 
         canReserve={canReserve}
         onClose={() => setModalOpen(false)}
         onSave={onSave}
+      />
+
+      <SiteDetailModal
+        isOpen={!!detailSite}
+        site={detailSite}
+        assignments={assignments}
+        onClose={() => setDetailSite(null)}
       />
     </div>
   );

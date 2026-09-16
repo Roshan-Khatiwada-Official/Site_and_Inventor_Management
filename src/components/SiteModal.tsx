@@ -63,6 +63,10 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('Site Name is required.'); return; }
+    if (!category.trim()) { setError('Site Type is required.'); return; }
+    if (!supervisor.trim()) { setError('Site Supervisor is required.'); return; }
+    if (!supervisorContact.trim()) { setError('Supervisor Contact is required.'); return; }
+    if (workerCount === null || workerCount === undefined || Number.isNaN(workerCount)) { setError('Number of Workers is required.'); return; }
 
     let reservedById = site ? site.reservedById : '';
     let reservedByName = site ? site.reservedByName : '';
@@ -86,7 +90,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
       foundByName: site ? site.foundByName : currentUser.name,
       reservedById,
       reservedByName,
-      status: site ? site.status : 'Available',
+      status: site ? site.status : 'Pending Approval',
       createdAt: site ? site.createdAt : todayStr(),
       updatedAt: site ? site.updatedAt : todayStr(),
     };
@@ -125,8 +129,8 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
           </div>
 
           <div>
-            <label className="block font-semibold mb-1">Site Type</label>
-            <select value={category} onChange={e => setCategory(e.target.value)} className={`${field} bg-white`}>
+            <label className="block font-semibold mb-1">Site Type *</label>
+            <select required value={category} onChange={e => setCategory(e.target.value)} className={`${field} bg-white`}>
               <option value="">— select a type —</option>
               {SITE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -140,22 +144,22 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold mb-1">Site Supervisor</label>
-              <input value={supervisor} onChange={e => setSupervisor(e.target.value)} placeholder="Name" className={field} />
+              <label className="block font-semibold mb-1">Site Supervisor *</label>
+              <input required value={supervisor} onChange={e => setSupervisor(e.target.value)} placeholder="Name" className={field} />
             </div>
             <div>
-              <label className="block font-semibold mb-1">Supervisor Contact</label>
-              <input value={supervisorContact} onChange={e => setSupervisorContact(e.target.value)} placeholder="Phone" className={field} />
+              <label className="block font-semibold mb-1">Supervisor Contact *</label>
+              <input required value={supervisorContact} onChange={e => setSupervisorContact(e.target.value)} placeholder="Phone" className={field} />
             </div>
           </div>
 
           <div>
-            <label className="block font-semibold mb-1">Number of Workers at this Site</label>
-            <input type="number" min="0" value={workerCount} onChange={e => setWorkerCount(parseInt(e.target.value) || 0)} className={field} />
+            <label className="block font-semibold mb-1">Number of Workers at this Site *</label>
+            <input required type="number" min="0" value={workerCount} onChange={e => setWorkerCount(parseInt(e.target.value) || 0)} className={field} />
           </div>
 
           <div>
-            <label className="block font-semibold mb-1">Note</label>
+            <label className="block font-semibold mb-1">Note (optional)</label>
             <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="Anything worth recording about this site…" className={field} />
           </div>
 
@@ -165,11 +169,18 @@ export const SiteModal: React.FC<SiteModalProps> = ({ isOpen, site, currentUser,
               <span>
                 <span className="font-semibold text-slate-800">I will collect this site myself</span>
                 <span className="block text-[11px] text-slate-500">
-                  Goes straight into your My Work — no request needed, and other collectors won't see it.
-                  Leave unchecked to put it in the shared pool instead.
+                  {site
+                    ? "Goes straight into your My Work — no request needed. Other collectors can still see and request this site too; leave unchecked to skip claiming it for yourself."
+                    : "Once an admin approves this site, it goes straight into your My Work — no request needed. Other collectors can still see and request this site too; leave unchecked to skip claiming it for yourself."}
                 </span>
               </span>
             </label>
+          )}
+
+          {!site && (
+            <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              New sites are submitted for admin approval before they're available for shoot.
+            </p>
           )}
 
           {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}

@@ -1,4 +1,4 @@
-import { Site, InventoryItem, Assignment, SiteRequest, UserAccount, ReturnRecord } from '../types';
+import { Site, InventoryItem, Assignment, SiteRequest, UserAccount, ReturnRecord, CollectionSession } from '../types';
 
 /**
  * Client for the Google Apps Script "database bridge" (see /apps-script/Code.gs).
@@ -64,7 +64,7 @@ function normalize(raw: any): AppData {
       foundByName: s.foundByName || '',
       reservedById: s.reservedById || '',
       reservedByName: s.reservedByName || '',
-      status: s.status === 'Assigned' ? 'Assigned' : 'Available',
+      status: s.status === 'Pending Approval' ? 'Pending Approval' : 'Available',
       createdAt: s.createdAt || '',
       updatedAt: s.updatedAt || s.createdAt || '',
     })),
@@ -93,7 +93,18 @@ function normalize(raw: any): AppData {
       assignedByName: a.assignedByName || '',
       status: a.status === 'Completed' ? 'Completed' : 'Active',
       hoursLogged: Number(a.hoursLogged) || 0,
-      sessions: arr<any>(a.sessions),
+      sessions: arr<any>(a.sessions).map((s: any, idx: number): CollectionSession => ({
+        id: s.id || `ses-legacy-${a.id}-${idx}`,
+        date: s.date || '',
+        hours: Number(s.hours) || 0,
+        actualHours: s.actualHours != null && s.actualHours !== '' ? Number(s.actualHours) : undefined,
+        verifiedByName: s.verifiedByName || undefined,
+        verifiedAt: s.verifiedAt || undefined,
+        note: s.note || undefined,
+        cameraId: s.cameraId || undefined,
+        cameraName: s.cameraName || undefined,
+        task: s.task || undefined,
+      })),
       createdAt: a.createdAt || '',
       updatedAt: a.updatedAt || a.createdAt || '',
     })),

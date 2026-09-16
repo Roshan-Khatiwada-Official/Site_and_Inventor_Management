@@ -2,24 +2,41 @@ import React, { useState, useMemo } from 'react';
 import { MapPin, Send, Search, Building2, Clock, Lock, X } from 'lucide-react';
 import { Site, SiteRequest, Assignment } from '../types';
 import { byNewest } from '../utils/storage';
+import { actualHoursOf } from '../utils/collectionReport';
 
 interface AvailableSitesViewProps {
   sites: Site[];
   myRequests: SiteRequest[];
   assignments: Assignment[];
+  currentUserId: string;
   onRequest: (siteId: string) => void;
   onCancelRequest: (requestId: string) => void;
 }
 
-export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, onRequest, onCancelRequest }) => {
+export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, myRequests, assignments, currentUserId, onRequest, onCancelRequest }) => {
   const [q, setQ] = useState('');
   const hoursBySite = useMemo(() => {
-    const m = new Map<string, number>();
-    assignments.forEach(a => m.set(a.siteId, (m.get(a.siteId) || 0) + (Number(a.hoursLogged) || 0)));
+    const m = new Map<string, { claimed: number; actual: number }>();
+    assignments.forEach(a => {
+      const e = m.get(a.siteId) || { claimed: 0, actual: 0 };
+      e.claimed += Number(a.hoursLogged) || 0;
+      e.actual += actualHoursOf(a);
+      m.set(a.siteId, e);
+    });
     return m;
   }, [assignments]);
-  const latestRequestFor = (siteId: string) =>
-    [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
+  // A pending/approved request only blocks re-requesting while it still has a
+  // live effect — an old Approved request whose assignment is since Completed
+  // shouldn't stop the collector from visiting this site again.
+  const latestRequestFor = (siteId: string) => {
+    const candidates = [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+    const latest = candidates[0];
+    if (latest?.status === 'Approved') {
+      const hasActiveAssignment = assignments.some(a => a.siteId === siteId && a.collectorId === currentUserId && a.status === 'Active');
+      if (!hasActiveAssignment) return undefined;
+    }
+    return latest;
+  };
   const list = sites.filter(s => {
     const t = q.toLowerCase();
     return s.name.toLowerCase().includes(t) || s.code.toLowerCase().includes(t) || s.foundByName.toLowerCase().includes(t) || s.category.toLowerCase().includes(t);
@@ -53,10 +70,15 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
               <div>
                 <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                   {s.name}
-                  {s.reservedById && <span className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 font-medium"><Lock className="w-2.5 h-2.5" />yours</span>}
+                  {s.reservedById === currentUserId && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 font-medium"><Lock className="w-2.5 h-2.5" />yours</span>
+                  )}
                 </div>
                 <div className="text-[11px] font-mono text-slate-400">{s.code}</div>
                 {s.category && <div className="text-[11px] text-blue-600 font-medium mt-0.5">{s.category}</div>}
+                {s.reservedById && s.reservedById !== currentUserId && (
+                  <div className="text-[10px] text-slate-400 mt-0.5">{s.reservedByName} is also collecting here — you can still request it.</div>
+                )}
               </div>
               <div className="text-xs text-slate-500 space-y-1">
                 {(s.latitude || s.longitude) ? (
@@ -70,7 +92,9 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
                 <div>Found by: {s.foundByName || '—'}</div>
                 <div className="inline-flex items-center gap-1 font-medium text-slate-700">
                   <Clock className="w-3 h-3 text-blue-500" />
-                  {(hoursBySite.get(s.id) || 0).toFixed(1)}h of data collected here
+                  {(hoursBySite.get(s.id)?.claimed || 0).toFixed(1)}h entered
+                  <span className="text-slate-300">/</span>
+                  <span className="text-emerald-600">{(hoursBySite.get(s.id)?.actual || 0).toFixed(1)}h actual</span> collected here
                 </div>
                 {s.note && <div className="text-slate-400">{s.note}</div>}
               </div>

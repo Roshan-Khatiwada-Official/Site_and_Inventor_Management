@@ -33,15 +33,38 @@ export interface UserAccount {
   lastLogin?: string;
 }
 
-export type SiteStatus = 'Available' | 'Assigned';
+// A site stays 'Available' once approved, no matter how many collectors are
+// working there at once — multiple people may collect at the same site
+// concurrently, and one collector may hold several sites at once.
+export type SiteStatus = 'Pending Approval' | 'Available';
 
 export const SITE_CATEGORIES = [
-  'Butchery',
-  "Electronical Equipments repairmen's",
-  'Barber shop',
-  'Welding (CNC cutting, full object making process)',
-  'Construction marble layout / plumbing etc',
-  'Automobiles repair',
+  'Retail and Consumer Goods',
+  'Fashion',
+  'Repair Services',
+  'Food and Beverage',
+  'Construction and Hardware',
+  'Food Processing',
+  'Printing and Design',
+  'Factory',
+  'Hospitality',
+  'Automotive and Transport',
+  'Sports and Recreation',
+  'Creative Workshops',
+  'Administrative',
+  'Education and Training',
+  'Industrial Manufacturing',
+  'Energy and Utilities',
+  'Healthcare and Pharmacy',
+  'Administrative & Office Services',
+  'Cleaning and Sanitation',
+  'Laboratory / Scientific',
+  'Childcare and Caregiving',
+  'Public Safety and Emergency Response',
+  'Agriculture and Farming',
+  'Beauty and Personal Care',
+  'Entertainment and Events',
+  'Other',
 ] as const;
 
 export interface Site {
@@ -57,7 +80,8 @@ export interface Site {
   note: string;
   foundById: string;          // user id who added it
   foundByName: string;        // denormalised for reporting
-  reservedById: string;       // if set, only this user may collect here ('' = open pool)
+  reservedById: string;       // the finder who ticked "I'll collect this myself" ('' = nobody self-claimed it).
+                               // Informational only — does NOT block anyone else from requesting/being assigned here too.
   reservedByName: string;
   status: SiteStatus;
   createdAt: string;
@@ -89,9 +113,16 @@ export interface InventoryItem {
 }
 
 export interface CollectionSession {
-  date: string;               // YYYY-MM-DD
-  hours: number;
-  note?: string;
+  id: string;                  // stable id, so admin verification can address one entry
+  date: string;               // YYYY-MM-DD — set once by the collector; approving/verifying later never changes it
+  hours: number;               // entered hours, as the data collector claimed them
+  actualHours?: number;        // verified hours, filled in by admin during approval (undefined = not yet reviewed)
+  verifiedByName?: string;
+  verifiedAt?: string;
+  note?: string;               // legacy free-form note
+  cameraId?: string;           // inventory item id of the camera used
+  cameraName?: string;         // denormalised
+  task?: string;                // task performed with that camera on that date
 }
 
 export type AssignmentStatus = 'Active' | 'Completed';

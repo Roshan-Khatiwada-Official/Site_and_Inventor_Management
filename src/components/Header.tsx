@@ -22,6 +22,7 @@ const TABS: Record<UserAccount['role'], { id: string; label: string }[]> = {
     { id: 'assignments', label: 'Assignments' },
     { id: 'requests', label: 'Requests' },
     { id: 'reports', label: 'Reports' },
+    { id: 'shootreport', label: 'Shoot Report' },
     { id: 'users', label: 'Logins' },
   ],
   'Site Finder': [{ id: 'mysites', label: 'My Sites' }],
@@ -51,7 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-slate-900 text-slate-100 border-b border-slate-800 sticky top-0 z-30 shadow">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white">

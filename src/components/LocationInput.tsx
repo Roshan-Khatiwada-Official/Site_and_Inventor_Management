@@ -63,7 +63,7 @@ export const LocationInput: React.FC<LocationInputProps> = ({ lat, lng, onChange
 
   return (
     <div className="space-y-2">
-      <label className="block font-semibold text-slate-700">Location</label>
+      <label className="block font-semibold text-slate-700">Location (optional)</label>
 
       {/* on site */}
       <button type="button" onClick={useGps} disabled={gps}

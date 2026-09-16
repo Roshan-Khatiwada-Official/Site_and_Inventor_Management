@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Clock, MapPin, Package, CheckCircle2, Briefcase } from 'lucide-react';
+import { Clock, MapPin, Package, CheckCircle2, Briefcase, Camera, Plus, X } from 'lucide-react';
 import { Assignment, Site, InventoryItem, CollectionSession } from '../types';
 import { todayStr, byNewest } from '../utils/storage';
+import { TASKS_BY_CATEGORY } from '../taskMasterlist';
+import { actualHoursOf } from '../utils/collectionReport';
 
 interface MyWorkViewProps {
   assignments: Assignment[];
   sites: Site[];
   myKit: InventoryItem[];
-  onFinish: (assignmentId: string, session: CollectionSession | null) => void;
+  onFinish: (assignmentId: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (assignmentId: string) => void;
 }
 
@@ -49,6 +51,7 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKi
             key={a.id}
             a={a}
             site={sites.find(s => s.id === a.siteId)}
+            myKit={myKit}
             onFinish={onFinish}
             onReopen={onReopen}
           />
@@ -58,23 +61,67 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKi
   );
 };
 
+interface TaskRow {
+  task: string;
+  hours: string;
+}
+
 const AssignmentCard: React.FC<{
   a: Assignment;
   site?: Site;
-  onFinish: (id: string, s: CollectionSession | null) => void;
+  myKit: InventoryItem[];
+  onFinish: (id: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (id: string) => void;
-}> = ({ a, site, onFinish, onReopen }) => {
-  const [hours, setHours] = useState('');
-  const [note, setNote] = useState('');
+}> = ({ a, site, myKit, onFinish, onReopen }) => {
   const [date, setDate] = useState(todayStr());
+  const [selectedCameraIds, setSelectedCameraIds] = useState<string[]>([]);
+  const [rowsByCamera, setRowsByCamera] = useState<Record<string, TaskRow[]>>({});
+  // Only the tasks belonging to this site's own field/category — not the whole masterlist.
+  const siteTasks = site ? TASKS_BY_CATEGORY[site.category] || [] : [];
+
+  const toggleCamera = (cam: InventoryItem) => {
+    setSelectedCameraIds(prev => {
+      if (prev.includes(cam.id)) {
+        setRowsByCamera(r => { const next = { ...r }; delete next[cam.id]; return next; });
+        return prev.filter(id => id !== cam.id);
+      }
+      setRowsByCamera(r => ({ ...r, [cam.id]: [{ task: '', hours: '' }] }));
+      return [...prev, cam.id];
+    });
+  };
+
+  const addRow = (camId: string) => {
+    setRowsByCamera(r => ({ ...r, [camId]: [...(r[camId] || []), { task: '', hours: '' }] }));
+  };
+  const removeRow = (camId: string, idx: number) => {
+    setRowsByCamera(r => ({ ...r, [camId]: r[camId].filter((_, i) => i !== idx) }));
+  };
+  const updateRow = (camId: string, idx: number, field: keyof TaskRow, value: string) => {
+    setRowsByCamera(r => ({
+      ...r,
+      [camId]: r[camId].map((row, i) => (i === idx ? { ...row, [field]: value } : row)),
+    }));
+  };
+
+  const totalHours = Object.values(rowsByCamera)
+    .flat()
+    .reduce((sum, row) => sum + (parseFloat(row.hours) || 0), 0);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const h = parseFloat(hours);
-    const session: CollectionSession | null = h && h > 0 ? { date, hours: h, note: note.trim() || undefined } : null;
-    if (!session && !window.confirm('Finish this site with no extra hours entered?')) return;
-    onFinish(a.id, session);
-    setHours(''); setNote('');
+    const sessions: Omit<CollectionSession, 'id'>[] = [];
+    selectedCameraIds.forEach(camId => {
+      const cam = myKit.find(i => i.id === camId);
+      (rowsByCamera[camId] || []).forEach(row => {
+        const h = parseFloat(row.hours);
+        if (h && h > 0) {
+          sessions.push({ date, hours: h, task: row.task.trim() || undefined, cameraId: camId, cameraName: cam?.name });
+        }
+      });
+    });
+    if (sessions.length === 0 && !window.confirm('Finish this site with no extra hours entered?')) return;
+    onFinish(a.id, sessions);
+    setSelectedCameraIds([]); setRowsByCamera({});
   };
 
   return (
@@ -92,8 +139,11 @@ const AssignmentCard: React.FC<{
         </div>
         <div className="text-right">
           <div className="inline-flex items-center gap-1 text-sm font-bold text-slate-800">
-            <Clock className="w-4 h-4 text-blue-500" /> {a.hoursLogged.toFixed(1)}h total
+            <Clock className="w-4 h-4 text-blue-500" /> {a.hoursLogged.toFixed(1)}h entered
+            <span className="text-slate-300">/</span>
+            <span className="text-emerald-600">{actualHoursOf(a).toFixed(1)}h actual</span>
           </div>
+          <div className="text-[10px] text-slate-400">Total hours — calculated automatically; actual fills in once admin verifies</div>
           <div className="mt-1">
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
               a.status === 'Active' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -105,36 +155,98 @@ const AssignmentCard: React.FC<{
       {a.sessions.length > 0 && (
         <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 space-y-0.5">
           {a.sessions.map((s, idx) => (
-            <div key={idx} className="flex justify-between">
-              <span>{s.date}{s.note ? ` — ${s.note}` : ''}</span>
-              <span className="font-medium text-slate-700">{s.hours}h</span>
+            <div key={idx} className="flex justify-between gap-2">
+              <span>
+                {s.date}
+                {s.cameraName ? ` — ${s.cameraName}` : ''}
+                {s.task ? ` · ${s.task}` : ''}
+                {!s.cameraName && s.note ? ` — ${s.note}` : ''}
+              </span>
+              <span className="font-medium text-slate-700 shrink-0">
+                {s.hours}h{s.actualHours != null ? <span className="text-emerald-600"> / {s.actualHours}h actual</span> : ''}
+              </span>
             </div>
           ))}
         </div>
       )}
 
       {a.status === 'Active' ? (
-        <form onSubmit={submit} className="mt-3 border-t border-slate-100 pt-3 space-y-2 text-xs">
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <label className="block font-semibold text-slate-600 mb-1">Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="px-2 py-1.5 border border-slate-300 rounded-lg" />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-600 mb-1">Hours of data collected</label>
-              <input type="number" step="0.25" min="0" value={hours} onChange={e => setHours(e.target.value)} placeholder="e.g. 3.5"
-                className="w-28 px-2 py-1.5 border border-slate-300 rounded-lg" />
-            </div>
-            <div className="flex-1 min-w-[140px]">
-              <label className="block font-semibold text-slate-600 mb-1">Note (optional)</label>
-              <input value={note} onChange={e => setNote(e.target.value)} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg" />
-            </div>
+        <form onSubmit={submit} className="mt-3 border-t border-slate-100 pt-3 space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-600 mb-1">Date</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="px-2 py-1.5 border border-slate-300 rounded-lg" />
           </div>
-          <button type="submit"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
-            <CheckCircle2 className="w-4 h-4" /> Submit hours &amp; finish site
-          </button>
+
+          <div>
+            <label className="block font-semibold text-slate-600 mb-1 flex items-center gap-1"><Camera className="w-3.5 h-3.5" /> Camera(s) used</label>
+            {myKit.length === 0 ? (
+              <p className="text-slate-400">No camera equipment assigned to you yet — ask the admin.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {myKit.map(cam => (
+                  <button key={cam.id} type="button" onClick={() => toggleCamera(cam)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${
+                      selectedCameraIds.includes(cam.id)
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-white border-slate-300 text-slate-600 hover:border-blue-400'
+                    }`}>
+                    <Camera className="w-3 h-3" /> {cam.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selectedCameraIds.map(camId => {
+            const cam = myKit.find(i => i.id === camId);
+            const rows = rowsByCamera[camId] || [];
+            return (
+              <div key={camId} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="font-semibold text-slate-700 flex items-center gap-1"><Camera className="w-3.5 h-3.5 text-blue-500" /> {cam?.name}</div>
+                {rows.map((row, idx) => (
+                  <div key={idx} className="flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="block text-slate-500 mb-1">Task done</label>
+                      <select value={row.task} onChange={e => updateRow(camId, idx, 'task', e.target.value)}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded-lg bg-white">
+                        <option value="">— choose a task —</option>
+                        {siteTasks.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                      </select>
+                      {siteTasks.length === 0 && (
+                        <p className="mt-1 text-[10px] text-amber-600">No tasks listed yet for "{site?.category || 'this site\'s'}" — ask the admin.</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-slate-500 mb-1">Hours captured</label>
+                      <input type="number" step="0.25" min="0" value={row.hours} onChange={e => updateRow(camId, idx, 'hours', e.target.value)}
+                        placeholder="e.g. 2" className="w-24 px-2 py-1.5 border border-slate-300 rounded-lg bg-white" />
+                    </div>
+                    {rows.length > 1 && (
+                      <button type="button" onClick={() => removeRow(camId, idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg mb-0.5">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addRow(camId)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700">
+                  <Plus className="w-3.5 h-3.5" /> Add another task for this camera
+                </button>
+              </div>
+            );
+          })}
+
+          <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+            <div className="text-slate-600">
+              Total for this entry: <span className="font-bold text-slate-900">{totalHours.toFixed(2)}h</span> <span className="text-[10px] text-slate-400">(added up automatically)</span>
+            </div>
+            <button type="submit"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
+              <CheckCircle2 className="w-4 h-4" /> Submit hours &amp; finish site
+            </button>
+          </div>
         </form>
       ) : (
         <button onClick={() => onReopen(a.id)} className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500 hover:text-slate-800 underline block">

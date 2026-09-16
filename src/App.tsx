@@ -38,6 +38,7 @@ import { InventoryView } from './components/InventoryView';
 import { AssignmentsView } from './components/AssignmentsView';
 import { RequestsView } from './components/RequestsView';
 import { ReportsView } from './components/ReportsView';
+import { CollectionReportView } from './components/CollectionReportView';
 import { AvailableSitesView } from './components/AvailableSitesView';
 import { MyWorkView } from './components/MyWorkView';
 import { UsersView } from './components/UsersView';
@@ -376,7 +377,6 @@ export default function App() {
       !assignments.some(a => a.siteId === s.id && a.collectorId === s.reservedById && a.status === 'Active');
 
     if (selfAssigning) {
-      s.status = 'Assigned';
       const newAsg: Assignment = {
         id: uid('asg'),
         siteId: s.id,
@@ -395,7 +395,51 @@ export default function App() {
     }
 
     setSites(prev => (prev.some(x => x.id === s.id) ? prev.map(x => (x.id === s.id ? s : x)) : [...prev, s]));
-    showToast(selfAssigning ? `Added "${s.name}" to your My Work.` : `Saved site: ${s.name}`);
+    showToast(selfAssigning ? `Added "${s.name}" to your My Work.` : s.status === 'Pending Approval' ? `Submitted "${s.name}" for admin approval.` : `Saved site: ${s.name}`);
+  };
+  // Admin approves a newly-added site: it becomes Available for shoot, or — if
+  // the finder had already claimed it for themselves — goes straight to their My Work.
+  const approveSite = (id: string) => {
+    const site = sites.find(s => s.id === id);
+    if (!site || site.status !== 'Pending Approval') return;
+
+    const message = site.reservedById
+      ? `Approve "${site.name}"? It goes straight into ${site.reservedByName}'s My Work, and other collectors can still request it too.`
+      : `Approve "${site.name}"? It becomes available for shoot to all data collectors.`;
+
+    askConfirm(message, () => {
+      setSites(prev => prev.map(s => (s.id === id ? { ...s, status: 'Available', updatedAt: nowIso() } : s)));
+      if (site.reservedById) {
+        const newAsg: Assignment = {
+          id: uid('asg'),
+          siteId: site.id,
+          siteName: site.name,
+          collectorId: site.reservedById,
+          collectorName: site.reservedByName,
+          assignedById: site.reservedById,
+          assignedByName: site.reservedByName,
+          status: 'Active',
+          hoursLogged: 0,
+          sessions: [],
+          createdAt: todayStr(),
+          updatedAt: nowIso(),
+        };
+        setAssignments(prev => [...prev, newAsg]);
+        showToast(`Approved "${site.name}" — added to ${site.reservedByName}'s My Work.`);
+      } else {
+        showToast(`Approved "${site.name}" — now available for shoot.`);
+      }
+    }, { title: 'Approve site', confirmLabel: 'Approve', danger: false });
+  };
+  // Admin declines a pending site — it never went live, so simply removes it
+  // rather than leaving it stuck in limbo.
+  const rejectSite = (id: string) => {
+    const site = sites.find(s => s.id === id);
+    if (!site || site.status !== 'Pending Approval') return;
+    askConfirm(`Cancel approval for "${site.name}"? It will be removed and its finder will need to re-add it if this was a mistake.`, () => {
+      setSites(prev => prev.filter(s => s.id !== id));
+      showToast(`Rejected "${site.name}" — not added.`);
+    }, { title: 'Cancel approval', confirmLabel: 'Cancel approval' });
   };
   const deleteSite = (id: string) => {
     const site = sites.find(s => s.id === id);
@@ -482,10 +526,11 @@ export default function App() {
     };
   };
 
+  // Sites never lock to one collector — many people may work the same site at
+  // once, and assignments don't change a site's approval status.
   const saveAssignment = (draft: Assignment) => {
     const full = { ...denormAssignment(draft), updatedAt: nowIso() };
     setAssignments(prev => (prev.some(a => a.id === full.id) ? prev.map(a => (a.id === full.id ? full : a)) : [...prev, full]));
-    setSites(prev => prev.map(s => (s.id === full.siteId ? { ...s, status: 'Assigned', updatedAt: nowIso() } : s)));
     showToast(`Assigned ${full.collectorName} to ${full.siteName}.`);
   };
 
@@ -494,19 +539,16 @@ export default function App() {
     if (!removed) return;
     askConfirm(`Delete the assignment for ${removed.collectorName} at ${removed.siteName}? This can't be undone.`, () => {
       setAssignments(prev => prev.filter(a => a.id !== id));
-      const siteStillUsed = assignments.some(a => a.id !== id && a.siteId === removed.siteId);
-      if (!siteStillUsed) {
-        setSites(prev => prev.map(s => (s.id === removed.siteId ? { ...s, status: 'Available', updatedAt: nowIso() } : s)));
-      }
       showToast('Assignment deleted.');
     });
   };
 
-  // Data collector: enter hours and finish the site in one action.
-  const finishAssignment = (assignmentId: string, session: CollectionSession | null) => {
+  // Data collector: enter hours (per camera / per task) and finish the site in one action.
+  const finishAssignment = (assignmentId: string, newRows: Omit<CollectionSession, 'id'>[]) => {
+    const newSessions: CollectionSession[] = newRows.map(row => ({ ...row, id: uid('ses') }));
     setAssignments(prev => prev.map(a => {
       if (a.id !== assignmentId) return a;
-      const sessions = session ? [...a.sessions, session] : a.sessions;
+      const sessions = newSessions.length ? [...a.sessions, ...newSessions] : a.sessions;
       return {
         ...a,
         sessions,
@@ -515,12 +557,29 @@ export default function App() {
         updatedAt: nowIso(),
       };
     }));
-    showToast(session ? `Submitted ${session.hours}h — site marked done.` : 'Site marked done.');
+    const addedHours = newSessions.reduce((s, x) => s + (Number(x.hours) || 0), 0);
+    showToast(newSessions.length ? `Submitted ${addedHours.toFixed(2)}h — site marked done.` : 'Site marked done.');
   };
 
   const reopenAssignment = (assignmentId: string) => {
     setAssignments(prev => prev.map(a => (a.id === assignmentId ? { ...a, status: 'Active', updatedAt: nowIso() } : a)));
     showToast('Assignment re-opened.');
+  };
+
+  // Admin verifies the actual hours collected for one logged entry, alongside
+  // what the collector originally entered. The entry's date never changes —
+  // verification can happen any day after it was logged.
+  const verifySessionHours = (assignmentId: string, sessionId: string, actualHours: number) => {
+    setAssignments(prev => prev.map(a => {
+      if (a.id !== assignmentId) return a;
+      return {
+        ...a,
+        sessions: a.sessions.map(s => (s.id === sessionId
+          ? { ...s, actualHours, verifiedByName: currentUser?.name || 'Admin', verifiedAt: nowIso() }
+          : s)),
+        updatedAt: nowIso(),
+      };
+    }));
   };
 
   // Check an item back in from whoever holds it, with a condition check.
@@ -609,8 +668,6 @@ export default function App() {
           createdAt: todayStr(),
           updatedAt: nowIso(),
         });
-      } else {
-        setSites(prev => prev.map(s => (s.id === req.siteId ? { ...s, status: 'Assigned', updatedAt: nowIso() } : s)));
       }
     }
     showToast(approve ? 'Request approved — assignment created.' : 'Request rejected.');
@@ -650,10 +707,11 @@ export default function App() {
     () => (currentUser ? requests.filter(r => r.collectorId === currentUser.id) : []),
     [requests, currentUser]
   );
-  // Sites this person may collect at: open pool + any reserved for them.
+  // Any approved site is open to request — a self-claim by another finder
+  // doesn't block it; multiple collectors may work the same site at once.
   const availableSites = useMemo(
-    () => sites.filter(s => s.status === 'Available' && (!s.reservedById || s.reservedById === currentUser?.id)),
-    [sites, currentUser]
+    () => sites.filter(s => s.status === 'Available'),
+    [sites]
   );
   const dataCollectors = useMemo(
     () => users.filter(u => CAN_COLLECT.includes(u.role) && u.status === 'Active'),
@@ -706,14 +764,17 @@ export default function App() {
         outCount={itemsOutCount}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6">
         {role === 'Admin' && activeTab === 'sites' && (
           <SitesView
             mode="admin"
             sites={sites}
             users={users}
+            assignments={assignments}
             onSave={saveSite}
             onDelete={deleteSite}
+            onApprove={approveSite}
+            onReject={rejectSite}
             currentUser={currentUser}
           />
         )}
@@ -746,6 +807,9 @@ export default function App() {
         {role === 'Admin' && activeTab === 'reports' && (
           <ReportsView sites={sites} assignments={assignments} users={users} />
         )}
+        {role === 'Admin' && activeTab === 'shootreport' && (
+          <CollectionReportView assignments={assignments} sites={sites} inventory={inventory} onVerify={verifySessionHours} />
+        )}
         {role === 'Admin' && activeTab === 'users' && (
           <UsersView
             users={users}
@@ -762,6 +826,7 @@ export default function App() {
             mode="finder"
             sites={mySites}
             users={users}
+            assignments={assignments}
             onSave={saveSite}
             onDelete={deleteSite}
             currentUser={currentUser}
@@ -774,6 +839,7 @@ export default function App() {
             sites={availableSites}
             myRequests={myRequests}
             assignments={assignments}
+            currentUserId={currentUser.id}
             onRequest={createRequest}
             onCancelRequest={cancelRequest}
           />
@@ -805,7 +871,7 @@ export default function App() {
 }
 
 function roleTabIds(role: UserAccount['role']): string[] {
-  if (role === 'Admin') return ['sites', 'inventory', 'returns', 'assignments', 'requests', 'reports', 'users'];
+  if (role === 'Admin') return ['sites', 'inventory', 'returns', 'assignments', 'requests', 'reports', 'shootreport', 'users'];
   if (role === 'Site Finder') return ['mysites'];
   if (role === 'Field Worker') return ['mysites', 'available', 'mywork'];
   return ['available', 'mywork'];
