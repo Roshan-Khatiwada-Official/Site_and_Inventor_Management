@@ -9,11 +9,12 @@ interface MyWorkViewProps {
   assignments: Assignment[];
   sites: Site[];
   myKit: InventoryItem[];
+  onSubmitHours: (assignmentId: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onFinish: (assignmentId: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (assignmentId: string) => void;
 }
 
-export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKit, onFinish, onReopen }) => {
+export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKit, onSubmitHours, onFinish, onReopen }) => {
   return (
     <div className="space-y-4">
       <div>
@@ -52,6 +53,7 @@ export const MyWorkView: React.FC<MyWorkViewProps> = ({ assignments, sites, myKi
             a={a}
             site={sites.find(s => s.id === a.siteId)}
             myKit={myKit}
+            onSubmitHours={onSubmitHours}
             onFinish={onFinish}
             onReopen={onReopen}
           />
@@ -70,9 +72,10 @@ const AssignmentCard: React.FC<{
   a: Assignment;
   site?: Site;
   myKit: InventoryItem[];
+  onSubmitHours: (id: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onFinish: (id: string, sessions: Omit<CollectionSession, 'id'>[]) => void;
   onReopen: (id: string) => void;
-}> = ({ a, site, myKit, onFinish, onReopen }) => {
+}> = ({ a, site, myKit, onSubmitHours, onFinish, onReopen }) => {
   const [date, setDate] = useState(todayStr());
   const [selectedCameraIds, setSelectedCameraIds] = useState<string[]>([]);
   const [rowsByCamera, setRowsByCamera] = useState<Record<string, TaskRow[]>>({});
@@ -107,8 +110,7 @@ const AssignmentCard: React.FC<{
     .flat()
     .reduce((sum, row) => sum + (parseFloat(row.hours) || 0), 0);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const buildSessions = (): Omit<CollectionSession, 'id'>[] => {
     const sessions: Omit<CollectionSession, 'id'>[] = [];
     selectedCameraIds.forEach(camId => {
       const cam = myKit.find(i => i.id === camId);
@@ -119,6 +121,20 @@ const AssignmentCard: React.FC<{
         }
       });
     });
+    return sessions;
+  };
+
+  const submitHoursOnly = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const sessions = buildSessions();
+    if (sessions.length === 0) { window.alert('Enter at least one task and hours before submitting.'); return; }
+    onSubmitHours(a.id, sessions);
+    setSelectedCameraIds([]); setRowsByCamera({});
+  };
+
+  const finishSite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const sessions = buildSessions();
     if (sessions.length === 0 && !window.confirm('Finish this site with no extra hours entered?')) return;
     onFinish(a.id, sessions);
     setSelectedCameraIds([]); setRowsByCamera({});
@@ -171,7 +187,7 @@ const AssignmentCard: React.FC<{
       )}
 
       {a.status === 'Active' ? (
-        <form onSubmit={submit} className="mt-3 border-t border-slate-100 pt-3 space-y-3 text-xs">
+        <form onSubmit={e => e.preventDefault()} className="mt-3 border-t border-slate-100 pt-3 space-y-3 text-xs">
           <div>
             <label className="block font-semibold text-slate-600 mb-1">Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
@@ -242,10 +258,16 @@ const AssignmentCard: React.FC<{
             <div className="text-slate-600">
               Total for this entry: <span className="font-bold text-slate-900">{totalHours.toFixed(2)}h</span> <span className="text-[10px] text-slate-400">(added up automatically)</span>
             </div>
-            <button type="submit"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
-              <CheckCircle2 className="w-4 h-4" /> Submit hours &amp; finish site
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={submitHoursOnly}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg">
+                <Plus className="w-4 h-4" /> Submit hours
+              </button>
+              <button type="button" onClick={finishSite}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg">
+                <CheckCircle2 className="w-4 h-4" /> Mark site completed
+              </button>
+            </div>
           </div>
         </form>
       ) : (

@@ -543,7 +543,24 @@ export default function App() {
     });
   };
 
-  // Data collector: enter hours (per camera / per task) and finish the site in one action.
+  // Data collector: log hours (per camera / per task) against a site they're still working — stays Active.
+  const submitHours = (assignmentId: string, newRows: Omit<CollectionSession, 'id'>[]) => {
+    const newSessions: CollectionSession[] = newRows.map(row => ({ ...row, id: uid('ses') }));
+    setAssignments(prev => prev.map(a => {
+      if (a.id !== assignmentId) return a;
+      const sessions = [...a.sessions, ...newSessions];
+      return {
+        ...a,
+        sessions,
+        hoursLogged: sessions.reduce((s, x) => s + (Number(x.hours) || 0), 0),
+        updatedAt: nowIso(),
+      };
+    }));
+    const addedHours = newSessions.reduce((s, x) => s + (Number(x.hours) || 0), 0);
+    showToast(`Submitted ${addedHours.toFixed(2)}h.`);
+  };
+
+  // Data collector: optionally log any remaining hours, then mark the site done.
   const finishAssignment = (assignmentId: string, newRows: Omit<CollectionSession, 'id'>[]) => {
     const newSessions: CollectionSession[] = newRows.map(row => ({ ...row, id: uid('ses') }));
     setAssignments(prev => prev.map(a => {
@@ -849,6 +866,7 @@ export default function App() {
             assignments={myAssignments}
             sites={sites}
             myKit={myKit}
+            onSubmitHours={submitHours}
             onFinish={finishAssignment}
             onReopen={reopenAssignment}
           />
