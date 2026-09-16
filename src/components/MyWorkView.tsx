@@ -3,7 +3,7 @@ import { Clock, MapPin, Package, CheckCircle2, Briefcase, Camera, Plus, X } from
 import { Assignment, Site, InventoryItem, CollectionSession } from '../types';
 import { todayStr, byNewest } from '../utils/storage';
 import { TASKS_BY_CATEGORY } from '../taskMasterlist';
-import { actualHoursOf } from '../utils/collectionReport';
+import { actualHoursOf, hasVerifiedHours } from '../utils/collectionReport';
 
 interface MyWorkViewProps {
   assignments: Assignment[];
@@ -181,10 +181,16 @@ const AssignmentCard: React.FC<{
         <div className="text-right">
           <div className="inline-flex items-center gap-1 text-sm font-bold text-slate-800">
             <Clock className="w-4 h-4 text-blue-500" /> {a.hoursLogged.toFixed(1)}h entered
-            <span className="text-slate-300">/</span>
-            <span className="text-emerald-600">{actualHoursOf(a).toFixed(1)}h actual</span>
+            {hasVerifiedHours(a) && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="text-emerald-600">{actualHoursOf(a).toFixed(1)}h actual</span>
+              </>
+            )}
           </div>
-          <div className="text-[10px] text-slate-400">Total hours — calculated automatically; actual fills in once admin verifies</div>
+          <div className="text-[10px] text-slate-400">
+            {hasVerifiedHours(a) ? 'Total hours — calculated automatically; actual fills in once admin verifies' : 'Not verified by admin yet'}
+          </div>
           <div className="mt-1">
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
               a.status === 'Active' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'

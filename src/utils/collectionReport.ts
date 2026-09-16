@@ -1,8 +1,13 @@
 import { Assignment, CollectionSession, InventoryItem, Site } from '../types';
 
-/** Sum of actual (verified) hours on an assignment — falls back to entered hours per session until verified. */
+/** Sum of only the sessions on an assignment the admin has actually verified — 0 until then, never the entered hours. */
 export function actualHoursOf(a: Assignment): number {
-  return a.sessions.reduce((sum, s) => sum + (s.actualHours != null ? s.actualHours : Number(s.hours) || 0), 0);
+  return a.sessions.reduce((sum, s) => sum + (s.actualHours != null ? s.actualHours : 0), 0);
+}
+
+/** Whether an assignment has at least one admin-verified session yet. */
+export function hasVerifiedHours(a: Assignment): boolean {
+  return a.sessions.some(s => s.actualHours != null);
 }
 
 /** One logged session, flattened with its site/collector context for reporting. */
