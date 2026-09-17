@@ -139,6 +139,7 @@ export default function App() {
   const busyRef = useRef(false);            // a pull/push request is in flight
   const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
   const lastSyncedRef = useRef<AppData | null>(null); // last data confirmed in the sheet (merge base)
+  const schedulePushIfDirtyRef = useRef<(() => void) | null>(null); // set once the effect below defines it
 
   // Always-fresh mirrors of state, so a merge running after a debounce/await
   // sees edits made in the meantime instead of a stale closure.
@@ -170,7 +171,7 @@ export default function App() {
     }
     snapshotRef.current = snapshotOf(d);
     lastSyncedRef.current = d;
-    setTimeout(() => { hydratingRef.current = false; }, 0);
+    setTimeout(() => { hydratingRef.current = false; schedulePushIfDirtyRef.current?.(); }, 0);
   };
 
   // Initial load
@@ -200,11 +201,22 @@ export default function App() {
 
   // Debounced push on local change. Before writing we pull the sheet and merge,
   // so two people editing at the same time don't overwrite each other's rows.
-  useEffect(() => {
+  //
+  // This also runs (via schedulePushIfDirtyRef) right after any hydration window
+  // closes elsewhere (initial load, poll, or this push's own state-adopt step).
+  // Without that, an edit made in the brief moment those apply incoming state
+  // would be silently skipped here (hydratingRef.current was true) and never
+  // retried, since this effect only re-runs when its own dependencies change —
+  // so the edit would sit unsynced until the next poll overwrote it with the
+  // sheet's older data, making the change look like it "reverted" itself.
+  const schedulePushIfDirty = () => {
     if (!bridgeConfig?.webAppUrl || bridgeConfig.autoSyncEnabled === false) return;
     if (!bridgeReadyRef.current || hydratingRef.current) return;
 
-    const current = snapshotOf({ sites, inventory, assignments, requests, users });
+    const current = snapshotOf({
+      sites: sitesRef.current, inventory: inventoryRef.current, assignments: assignmentsRef.current,
+      requests: requestsRef.current, users: usersRef.current,
+    });
     if (current === snapshotRef.current) return; // nothing actually changed
 
     pushPendingRef.current = true;
@@ -250,7 +262,7 @@ export default function App() {
           setRequests(merged.requests);
           setUsers(merged.users);
           setCurrentUser(prev => (prev ? merged.users.find(u => u.id === prev.id) || prev : prev));
-          setTimeout(() => { hydratingRef.current = false; }, 0);
+          setTimeout(() => { hydratingRef.current = false; schedulePushIfDirtyRef.current?.(); }, 0);
         }
       } catch (err) {
         console.error('Auto-sync failed:', err);
@@ -262,6 +274,11 @@ export default function App() {
         setBlockingLoad(null);
       }
     }, 900);
+  };
+  schedulePushIfDirtyRef.current = schedulePushIfDirty;
+
+  useEffect(() => {
+    schedulePushIfDirty();
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites, inventory, assignments, requests, users]);
@@ -301,7 +318,7 @@ export default function App() {
         // which may still contain not-yet-synced local additions).
         snapshotRef.current = incoming;
         lastSyncedRef.current = d;
-        setTimeout(() => { hydratingRef.current = false; setBlockingLoad(null); }, 350);
+        setTimeout(() => { hydratingRef.current = false; setBlockingLoad(null); schedulePushIfDirtyRef.current?.(); }, 350);
       } catch {
         /* transient — try again next tick */
       } finally {
