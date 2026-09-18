@@ -137,7 +137,6 @@ export default function App() {
   const bridgeReadyRef = useRef(false);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushPendingRef = useRef(false);
-  const pushSeqRef = useRef(0);             // token so a finished push doesn't clear a newer pending one
   const busyRef = useRef(false);            // a pull/push request is in flight
   const snapshotRef = useRef('');           // JSON of the last data known to match the sheet
   const lastSyncedRef = useRef<AppData | null>(null); // last data confirmed in the sheet (merge base)
@@ -205,12 +204,19 @@ export default function App() {
   // so two people editing at the same time don't overwrite each other's rows.
   //
   // This also runs (via schedulePushIfDirtyRef) right after any hydration window
-  // closes elsewhere (initial load, poll, or this push's own state-adopt step).
-  // Without that, an edit made in the brief moment those apply incoming state
-  // would be silently skipped here (hydratingRef.current was true) and never
-  // retried, since this effect only re-runs when its own dependencies change —
-  // so the edit would sit unsynced until the next poll overwrote it with the
-  // sheet's older data, making the change look like it "reverted" itself.
+  // closes elsewhere (initial load, poll, or this push's own state-adopt step),
+  // and again once any sync cycle finishes — so an edit made while one was
+  // already running is never silently dropped, just picked up by the next one.
+  //
+  // Only one sync cycle (push or poll) is ever allowed to run at a time
+  // (guarded by busyRef, checked synchronously with no `await` before it's
+  // set). `clearTimeout` on a re-schedule can only cancel a timer that hasn't
+  // fired yet — it can't stop one that's already mid-flight. Without this
+  // guard, a slow, older push (whose pull happened before a newer edit was
+  // even made) could finish AFTER a faster, newer push, and silently
+  // overwrite the sheet with its stale snapshot — dropping whatever the
+  // newer push had just saved. That race is what made a freshly-added site
+  // or request seem to vanish a couple of seconds after being saved.
   const schedulePushIfDirty = () => {
     if (!bridgeConfig?.webAppUrl || bridgeConfig.autoSyncEnabled === false) return;
     if (!bridgeReadyRef.current || hydratingRef.current) return;
@@ -222,9 +228,10 @@ export default function App() {
     if (current === snapshotRef.current) return; // nothing actually changed
 
     pushPendingRef.current = true;
-    const mySeq = ++pushSeqRef.current;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(async () => {
+      if (busyRef.current) return; // a sync cycle is already running; it will retry this on completion
+
       try {
         setIsSyncing(true);
         setBlockingLoad('Saving…');
@@ -256,24 +263,24 @@ export default function App() {
         lastSyncedRef.current = merged;
 
         // adopt the merged result so other people's concurrent additions appear here
-        if (mySeq === pushSeqRef.current) {
-          hydratingRef.current = true;
-          setSites(merged.sites);
-          setInventory(merged.inventory);
-          setAssignments(merged.assignments);
-          setRequests(merged.requests);
-          setUsers(merged.users);
-          setCurrentUser(prev => (prev ? merged.users.find(u => u.id === prev.id) || prev : prev));
-          setTimeout(() => { hydratingRef.current = false; schedulePushIfDirtyRef.current?.(); }, 0);
-        }
+        hydratingRef.current = true;
+        setSites(merged.sites);
+        setInventory(merged.inventory);
+        setAssignments(merged.assignments);
+        setRequests(merged.requests);
+        setUsers(merged.users);
+        setCurrentUser(prev => (prev ? merged.users.find(u => u.id === prev.id) || prev : prev));
+        setTimeout(() => { hydratingRef.current = false; }, 0);
       } catch (err) {
         console.error('Auto-sync failed:', err);
         showToast('Auto-sync to Google Sheet failed — will retry on next change.');
       } finally {
         busyRef.current = false;
-        if (mySeq === pushSeqRef.current) pushPendingRef.current = false;
+        pushPendingRef.current = false;
         setIsSyncing(false);
         setBlockingLoad(null);
+        // Something may have changed (or been deferred above) while this ran — recheck.
+        setTimeout(() => schedulePushIfDirtyRef.current?.(), 0);
       }
     }, 900);
   };
