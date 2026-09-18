@@ -59,8 +59,35 @@ function handleRequest(e) {
 
 function book() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
+// A single Sheets cell can hold at most ~50,000 characters. The whole
+// database used to be JSON.stringify'd into one cell, which silently failed
+// (and stopped saving ANY change) the moment the data grew past that limit.
+// Instead, each top-level collection gets its own row, split across as many
+// cells as it needs, so there's effectively no size ceiling.
+var CHUNK_SIZE = 40000;
+
 function readAll() {
   var sheet = book().getSheetByName(RAW_SHEET);
+  if (!sheet) return {};
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol < 2) return legacyReadAll(sheet);
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var result = {};
+  values.forEach(function (row) {
+    var key = row[0];
+    if (!key) return;
+    var json = row.slice(1).join('');
+    if (!json) return;
+    try {
+      result[key] = JSON.parse(json);
+    } catch (err) { /* skip a corrupt row rather than failing the whole read */ }
+  });
+  return result;
+}
+
+// One-time fallback so data saved before this change (single JSON cell) still loads.
+function legacyReadAll(sheet) {
   if (!sheet) return {};
   var value = sheet.getRange(1, 1).getValue();
   if (!value) return {};
@@ -77,7 +104,23 @@ function writeAll(data) {
 
   var raw = wb.getSheetByName(RAW_SHEET);
   if (!raw) raw = wb.insertSheet(RAW_SHEET);
-  raw.getRange(1, 1).setValue(JSON.stringify(data));
+  raw.clearContents();
+
+  var keys = Object.keys(data);
+  var rows = keys.map(function (key) {
+    var json = JSON.stringify(data[key]);
+    var chunks = [];
+    for (var i = 0; i < json.length; i += CHUNK_SIZE) chunks.push(json.slice(i, i + CHUNK_SIZE));
+    if (!chunks.length) chunks = [''];
+    return { key: key, chunks: chunks };
+  });
+  var maxChunks = rows.reduce(function (m, r) { return Math.max(m, r.chunks.length); }, 1);
+  var matrix = rows.map(function (r) {
+    var row = [r.key];
+    for (var i = 0; i < maxChunks; i++) row.push(r.chunks[i] || '');
+    return row;
+  });
+  if (matrix.length) raw.getRange(1, 1, matrix.length, maxChunks + 1).setValues(matrix);
   try { raw.hideSheet(); } catch (hideErr) {}
 
   Object.keys(data).forEach(function (key) {
