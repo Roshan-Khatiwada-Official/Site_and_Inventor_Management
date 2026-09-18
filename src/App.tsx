@@ -61,25 +61,27 @@ const nowIso = () => new Date().toISOString();
  * on the very next sync.
  */
 
-/** For PUSHING: our local copy wins for anything we still have (add/edit);
- *  anything we had in `base` but no longer have locally is a delete, and is
- *  dropped even if the sheet still has it. */
-function mergeLocalIntoRemote<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
-  const baseIds = new Set(base.map(x => x.id));
-  const localIds = new Set(local.map(x => x.id));
+/**
+ * 3-way merge (used for both pushing and polling): anything we've changed
+ * since `base` — added, edited, or deleted — wins; anything we haven't
+ * touched takes the sheet's current value.
+ *
+ * This has to compare local against base BY VALUE, not just by id: an edit
+ * to an existing record has the same id in base/remote/local, so an id-only
+ * check can't tell "we edited this" from "we haven't touched this since the
+ * last sync" — and treating an edit as untouched is exactly what let a poll
+ * that raced a slow/failed push silently discard the edit and restore the
+ * old value (the "small refresh and my change is gone" bug).
+ */
+function threeWayMerge<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
+  const baseMap = new Map(base.map(x => [x.id, x]));
+  const localMap = new Map(local.map(x => [x.id, x]));
   const result = new Map<string, T>(remote.map(x => [x.id, x]));
-  baseIds.forEach(id => { if (!localIds.has(id)) result.delete(id); }); // our deletions
-  local.forEach(x => result.set(x.id, x)); // our adds/edits win
-  return [...result.values()];
-}
-
-/** For POLLING: the sheet is trusted (so other people's deletes reach us
- *  too); we only keep local rows that are brand new and not yet synced. */
-function mergeRemoteIntoLocal<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
-  const baseIds = new Set(base.map(x => x.id));
-  const remoteIds = new Set(remote.map(x => x.id));
-  const result = new Map<string, T>(remote.map(x => [x.id, x]));
-  local.forEach(x => { if (!baseIds.has(x.id) && !remoteIds.has(x.id)) result.set(x.id, x); });
+  baseMap.forEach((_, id) => { if (!localMap.has(id)) result.delete(id); }); // deleted locally
+  localMap.forEach((x, id) => {
+    const baseItem = baseMap.get(id);
+    if (!baseItem || JSON.stringify(baseItem) !== JSON.stringify(x)) result.set(id, x); // added/edited locally
+  });
   return [...result.values()];
 }
 
@@ -241,11 +243,11 @@ export default function App() {
         };
         const merged: AppData = remote
           ? {
-              sites: mergeLocalIntoRemote(remote.sites, localNow.sites, base?.sites || []),
-              inventory: mergeLocalIntoRemote(remote.inventory, localNow.inventory, base?.inventory || []),
-              assignments: mergeLocalIntoRemote(remote.assignments, localNow.assignments, base?.assignments || []),
-              requests: mergeLocalIntoRemote(remote.requests, localNow.requests, base?.requests || []),
-              users: mergeLocalIntoRemote(remote.users, localNow.users, base?.users || []),
+              sites: threeWayMerge(remote.sites, localNow.sites, base?.sites || []),
+              inventory: threeWayMerge(remote.inventory, localNow.inventory, base?.inventory || []),
+              assignments: threeWayMerge(remote.assignments, localNow.assignments, base?.assignments || []),
+              requests: threeWayMerge(remote.requests, localNow.requests, base?.requests || []),
+              users: threeWayMerge(remote.users, localNow.users, base?.users || []),
             }
           : localNow;
 
@@ -300,11 +302,11 @@ export default function App() {
         // only truly-new, not-yet-synced local rows are preserved.
         const base = lastSyncedRef.current;
         const merged: AppData = {
-          sites: mergeRemoteIntoLocal(d.sites, sitesRef.current, base?.sites || []),
-          inventory: mergeRemoteIntoLocal(d.inventory, inventoryRef.current, base?.inventory || []),
-          assignments: mergeRemoteIntoLocal(d.assignments, assignmentsRef.current, base?.assignments || []),
-          requests: mergeRemoteIntoLocal(d.requests, requestsRef.current, base?.requests || []),
-          users: d.users.length ? mergeRemoteIntoLocal(d.users, usersRef.current, base?.users || []) : usersRef.current,
+          sites: threeWayMerge(d.sites, sitesRef.current, base?.sites || []),
+          inventory: threeWayMerge(d.inventory, inventoryRef.current, base?.inventory || []),
+          assignments: threeWayMerge(d.assignments, assignmentsRef.current, base?.assignments || []),
+          requests: threeWayMerge(d.requests, requestsRef.current, base?.requests || []),
+          users: d.users.length ? threeWayMerge(d.users, usersRef.current, base?.users || []) : usersRef.current,
         };
         setBlockingLoad('Updating…');
         hydratingRef.current = true;
