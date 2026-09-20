@@ -692,11 +692,19 @@ export default function App() {
 
   // ---- request handlers ----
   // Collectors may hold several sites at once — just no duplicate pending
-  // request for the same site.
+  // request for the same site, and no requesting a site they're already
+  // actively assigned to (this used to slip through when someone ticked
+  // "I'll collect this myself" — which assigns them immediately — and then
+  // separately requested the same site too, producing a duplicate,
+  // still-empty assignment once the request was approved).
   const createRequest = (siteId: string) => {
     if (!currentUser) return;
     const site = sites.find(s => s.id === siteId);
     if (!site) return;
+    if (assignments.some(a => a.siteId === siteId && a.collectorId === currentUser.id && a.status === 'Active')) {
+      showToast('You are already assigned to this site — no need to request it.');
+      return;
+    }
     if (requests.some(r => r.siteId === siteId && r.collectorId === currentUser.id && r.status === 'Pending')) {
       showToast('You already have a pending request for this site.');
       return;

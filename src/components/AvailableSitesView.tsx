@@ -65,6 +65,11 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
         {list.map(s => {
           const req = latestRequestFor(s.id);
           const st = req?.status;
+          // Covers the case where the assignment came from ticking "I'll
+          // collect this myself" on the site itself rather than a request —
+          // there'd be no request record to catch above, so without this a
+          // collector could still request a site they're already working.
+          const alreadyAssigned = assignments.some(a => a.siteId === s.id && a.collectorId === currentUserId && a.status === 'Active');
           return (
             <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
               <div>
@@ -99,7 +104,9 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
                 {s.note && <div className="text-slate-400">{s.note}</div>}
               </div>
               <div className="mt-auto pt-2">
-                {st === 'Pending' ? (
+                {alreadyAssigned ? (
+                  <span className="text-xs font-medium text-emerald-600">Already assigned — see “My Work”</span>
+                ) : st === 'Pending' ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-amber-600">Request pending…</span>
                     <button onClick={() => onCancelRequest(req!.id)}
