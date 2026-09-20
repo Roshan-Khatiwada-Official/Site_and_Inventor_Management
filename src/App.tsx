@@ -409,10 +409,13 @@ export default function App() {
 
     // "I will collect this myself" was just ticked on an open site -> put it
     // straight into that person's My Work instead of making them request it.
+    // Checked against ANY existing assignment for this site+collector, not
+    // just an Active one — a Completed one already covers this site too, so
+    // re-ticking it shouldn't add a second, empty entry.
     const selfAssigning =
       s.reservedById &&
       s.status === 'Available' &&
-      !assignments.some(a => a.siteId === s.id && a.collectorId === s.reservedById && a.status === 'Active');
+      !assignments.some(a => a.siteId === s.id && a.collectorId === s.reservedById);
 
     if (selfAssigning) {
       const newAsg: Assignment = {
@@ -692,17 +695,17 @@ export default function App() {
 
   // ---- request handlers ----
   // Collectors may hold several sites at once — just no duplicate pending
-  // request for the same site, and no requesting a site they're already
-  // actively assigned to (this used to slip through when someone ticked
-  // "I'll collect this myself" — which assigns them immediately — and then
-  // separately requested the same site too, producing a duplicate,
-  // still-empty assignment once the request was approved).
+  // request for the same site, and no requesting a site that's already in
+  // their My Work (Active OR Completed — this used to slip through both
+  // when someone ticked "I'll collect this myself" and separately requested
+  // the same site, and when someone re-requested a site they'd already
+  // finished, producing a duplicate, still-empty assignment on approval).
   const createRequest = (siteId: string) => {
     if (!currentUser) return;
     const site = sites.find(s => s.id === siteId);
     if (!site) return;
-    if (assignments.some(a => a.siteId === siteId && a.collectorId === currentUser.id && a.status === 'Active')) {
-      showToast('You are already assigned to this site — no need to request it.');
+    if (assignments.some(a => a.siteId === siteId && a.collectorId === currentUser.id)) {
+      showToast('This site is already in your My Work.');
       return;
     }
     if (requests.some(r => r.siteId === siteId && r.collectorId === currentUser.id && r.status === 'Pending')) {
@@ -738,7 +741,7 @@ export default function App() {
       ? { ...r, status: approve ? 'Approved' : 'Rejected', decidedAt: nowIso(), updatedAt: nowIso() }
       : r)));
     if (approve) {
-      const already = assignments.some(a => a.siteId === req.siteId && a.collectorId === req.collectorId && a.status === 'Active');
+      const already = assignments.some(a => a.siteId === req.siteId && a.collectorId === req.collectorId);
       if (!already) {
         saveAssignment({
           id: uid('asg'),

@@ -25,15 +25,16 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
     });
     return m;
   }, [assignments]);
-  // A pending/approved request only blocks re-requesting while it still has a
-  // live effect — an old Approved request whose assignment is since Completed
-  // shouldn't stop the collector from visiting this site again.
+  // A site already in the collector's My Work (Active or Completed) is
+  // never re-requestable from here — see `alreadyAssigned` below, which
+  // takes priority when rendering. This only decides what an Approved
+  // request's own badge should say otherwise.
   const latestRequestFor = (siteId: string) => {
     const candidates = [...myRequests].filter(x => x.siteId === siteId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
     const latest = candidates[0];
     if (latest?.status === 'Approved') {
-      const hasActiveAssignment = assignments.some(a => a.siteId === siteId && a.collectorId === currentUserId && a.status === 'Active');
-      if (!hasActiveAssignment) return undefined;
+      const hasAssignment = assignments.some(a => a.siteId === siteId && a.collectorId === currentUserId);
+      if (!hasAssignment) return undefined;
     }
     return latest;
   };
@@ -65,11 +66,12 @@ export const AvailableSitesView: React.FC<AvailableSitesViewProps> = ({ sites, m
         {list.map(s => {
           const req = latestRequestFor(s.id);
           const st = req?.status;
-          // Covers the case where the assignment came from ticking "I'll
-          // collect this myself" on the site itself rather than a request —
-          // there'd be no request record to catch above, so without this a
-          // collector could still request a site they're already working.
-          const alreadyAssigned = assignments.some(a => a.siteId === s.id && a.collectorId === currentUserId && a.status === 'Active');
+          // Any assignment (Active or Completed) means this site is already
+          // in the collector's My Work — covers both the self-claim case
+          // (no request record to catch above) and re-requesting a site
+          // they've already finished, either of which used to be able to
+          // produce a second, empty entry once approved.
+          const alreadyAssigned = assignments.some(a => a.siteId === s.id && a.collectorId === currentUserId);
           return (
             <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
               <div>
