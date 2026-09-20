@@ -40,11 +40,21 @@ export const CollectionReportView: React.FC<CollectionReportViewProps> = ({ assi
   const [view, setView] = useState<ReportView>('category');
   const [scope, setScope] = useState<ReportScope>('day');
   const [refDate, setRefDate] = useState(todayStr());
+  const [collectorFilter, setCollectorFilter] = useState('');
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const [openSites, setOpenSites] = useState<Set<string>>(new Set());
 
   const allRows = useMemo(() => flattenSessions(assignments, sites, inventory), [assignments, sites, inventory]);
-  const rows = useMemo(() => filterByScope(allRows, scope, refDate), [allRows, scope, refDate]);
+  const collectors = useMemo(() => {
+    const m = new Map<string, string>();
+    allRows.forEach(r => m.set(r.collectorId, r.collectorName));
+    return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allRows]);
+  const scopedRows = useMemo(
+    () => (collectorFilter ? allRows.filter(r => r.collectorId === collectorFilter) : allRows),
+    [allRows, collectorFilter]
+  );
+  const rows = useMemo(() => filterByScope(scopedRows, scope, refDate), [scopedRows, scope, refDate]);
 
   const tree = useMemo(() => buildCategoryTree(rows), [rows]);
   const collectorTotals = useMemo(() => buildCollectorTotals(rows), [rows]);
@@ -57,7 +67,8 @@ export const CollectionReportView: React.FC<CollectionReportViewProps> = ({ assi
 
   const scopeLabel = scope === 'day' ? refDate : scope === 'week' ? `week of ${refDate}` : scope === 'month' ? refDate.slice(0, 7) : 'all time';
 
-  const exportCsv = () => downloadCsv(`shoot-report-${scope}-${refDate}.csv`, sessionsToCsv(rows));
+  const collectorSuffix = collectorFilter ? `-${collectors.find(c => c.id === collectorFilter)?.name.replace(/\s+/g, '_')}` : '';
+  const exportCsv = () => downloadCsv(`shoot-report-${scope}-${refDate}${collectorSuffix}.csv`, sessionsToCsv(rows));
 
   const th = 'px-3 py-2 font-semibold';
   const td = 'px-3 py-2';
@@ -100,6 +111,11 @@ export const CollectionReportView: React.FC<CollectionReportViewProps> = ({ assi
           <input type="month" value={refDate.slice(0, 7)} onChange={e => setRefDate(`${e.target.value}-01`)}
             className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs" />
         )}
+        <select value={collectorFilter} onChange={e => setCollectorFilter(e.target.value)}
+          className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">
+          <option value="">All field workers</option>
+          {collectors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <span className="text-xs text-slate-400">
           Showing: {scopeLabel} · {rows.length} logged entr{rows.length === 1 ? 'y' : 'ies'} · {totalClaimed.toFixed(1)}h entered / {totalActual.toFixed(1)}h actual
         </span>

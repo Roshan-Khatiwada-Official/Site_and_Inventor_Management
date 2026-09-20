@@ -219,7 +219,6 @@ export default function App() {
   // or request seem to vanish a couple of seconds after being saved.
   const schedulePushIfDirty = () => {
     if (!bridgeConfig?.webAppUrl || bridgeConfig.autoSyncEnabled === false) return;
-    if (!bridgeReadyRef.current || hydratingRef.current) return;
 
     const current = snapshotOf({
       sites: sitesRef.current, inventory: inventoryRef.current, assignments: assignmentsRef.current,
@@ -227,7 +226,14 @@ export default function App() {
     });
     if (current === snapshotRef.current) return; // nothing actually changed
 
+    // Mark it pending even if we can't schedule the timer yet below — the
+    // periodic safety-net retry, and every hydration-window close, calls
+    // this again shortly, so a change made mid-hydration is never left
+    // untracked (which used to mean it only ever reached localStorage and
+    // got quietly wiped by the sheet's older data on the next page load).
     pushPendingRef.current = true;
+    if (!bridgeReadyRef.current || hydratingRef.current) return;
+
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(async () => {
       if (busyRef.current) return; // a sync cycle is already running; it will retry this on completion
@@ -336,6 +342,11 @@ export default function App() {
     };
 
     const timer = window.setInterval(poll, POLL_MS);
+    // Safety net: independent of poll/push completion callbacks, so a change
+    // marked pending while hydrating (see schedulePushIfDirty) is never
+    // stuck waiting on a callback chain that, for whatever reason, didn't
+    // fire — it's retried here within a few seconds no matter what.
+    const retryTimer = window.setInterval(() => schedulePushIfDirtyRef.current?.(), 4000);
     const onVisible = () => { if (!document.hidden) poll(); };
     // Refresh the moment the user comes back to / touches the screen.
     let lastNudge = 0;
@@ -348,6 +359,7 @@ export default function App() {
     window.addEventListener('pointerdown', nudge);
     return () => {
       window.clearInterval(timer);
+      window.clearInterval(retryTimer);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
       window.removeEventListener('pointerdown', nudge);

@@ -18,8 +18,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
   const siteFinders = users.filter(u => u.role === 'Site Finder');
   const siteById = useMemo(() => new Map(sites.map(s => [s.id, s])), [sites]);
 
+  // Selecting a field worker below scopes every section on this page — the
+  // detail log, the per-site/per-collector summaries, and the totals — to
+  // just their work, not only the top table.
+  const scopedAssignments = useMemo(
+    () => (collectorFilter ? assignments.filter(a => a.collectorId === collectorFilter) : assignments),
+    [assignments, collectorFilter]
+  );
+
   const rows = useMemo(() => {
-    return assignments
+    return scopedAssignments
       .map(a => {
         const site = siteById.get(a.siteId);
         return {
@@ -35,18 +43,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
           status: a.status,
         };
       })
-      .filter(r => !collectorFilter || r.collectorId === collectorFilter)
       .filter(r => !siteFilter || r.siteId === siteFilter)
       .filter(r => {
         const t = q.toLowerCase();
         return !t || r.collectorName.toLowerCase().includes(t) || r.siteName.toLowerCase().includes(t) || r.foundByName.toLowerCase().includes(t);
       })
       .sort((a, b) => b.hours - a.hours);
-  }, [assignments, siteById, collectorFilter, siteFilter, q]);
+  }, [scopedAssignments, siteById, siteFilter, q]);
 
   const perSite = useMemo(() => {
     const m = new Map<string, { siteName: string; foundByName: string; hours: number; actualHours: number; collectors: Set<string> }>();
-    assignments.forEach(a => {
+    scopedAssignments.forEach(a => {
       const site = siteById.get(a.siteId);
       const key = a.siteId;
       if (!m.has(key)) m.set(key, { siteName: a.siteName || site?.name || '(missing)', foundByName: site?.foundByName || '—', hours: 0, actualHours: 0, collectors: new Set() });
@@ -56,11 +63,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
       if (a.collectorName) e.collectors.add(a.collectorName);
     });
     return [...m.values()].sort((a, b) => b.hours - a.hours);
-  }, [assignments, siteById]);
+  }, [scopedAssignments, siteById]);
 
   const perCollector = useMemo(() => {
     const m = new Map<string, { name: string; hours: number; actualHours: number; sites: Set<string> }>();
-    assignments.forEach(a => {
+    scopedAssignments.forEach(a => {
       if (!m.has(a.collectorId)) m.set(a.collectorId, { name: a.collectorName, hours: 0, actualHours: 0, sites: new Set() });
       const e = m.get(a.collectorId)!;
       e.hours += a.hoursLogged;
@@ -68,10 +75,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ sites, assignments, us
       e.sites.add(a.siteId);
     });
     return [...m.values()].sort((a, b) => b.hours - a.hours);
-  }, [assignments]);
+  }, [scopedAssignments]);
 
-  const totalHours = assignments.reduce((s, a) => s + a.hoursLogged, 0);
-  const totalActualHours = assignments.reduce((s, a) => s + actualHoursOf(a), 0);
+  const totalHours = scopedAssignments.reduce((s, a) => s + a.hoursLogged, 0);
+  const totalActualHours = scopedAssignments.reduce((s, a) => s + actualHoursOf(a), 0);
 
   const stat = (icon: React.ReactNode, label: string, value: string | number) => (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
