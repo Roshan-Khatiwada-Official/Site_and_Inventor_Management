@@ -19,7 +19,7 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
 
-  const kitOf = (collectorId: string) => inventory.filter(i => i.heldById === collectorId);
+  const kitOf = (collectorId: string) => inventory.filter(i => i.holders.some(h => h.collectorId === collectorId));
 
   return (
     <div className="space-y-4">

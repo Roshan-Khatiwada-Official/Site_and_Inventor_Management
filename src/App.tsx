@@ -24,6 +24,7 @@ import {
   CAN_FIND_SITES,
   CAN_COLLECT,
 } from './types';
+import { heldQuantity, availableQuantity } from './utils/inventory';
 import {
   BridgeConfig,
   AppData,
@@ -527,7 +528,7 @@ export default function App() {
   const deleteInventoryItem = (id: string) => {
     const item = inventory.find(i => i.id === id);
     if (!item) return;
-    if (currentUser?.role !== 'Admin' && item.heldById) {
+    if (currentUser?.role !== 'Admin' && heldQuantity(item) > 0) {
       showToast('That item is held by a collector — check it in first (Returns tab).');
       return;
     }
@@ -537,21 +538,45 @@ export default function App() {
     });
   };
 
-  // Set exactly which items a data collector holds. Items they hold now but that
-  // are not in `itemIds` go back to stock; newly listed available items go to them.
+  // Set exactly which whole items a data collector holds (Logins → Equipment).
+  // Items they hold now but that are not in `itemIds` go back to stock; newly
+  // listed available items go to them, whole-item (their full quantity). For
+  // splitting one item's stock across several people, use Inventory → Assign.
   const setCollectorKit = (collectorId: string, itemIds: string[]) => {
     const collector = users.find(u => u.id === collectorId);
     setInventory(prev => prev.map(i => {
+      const currentQty = i.holders.find(h => h.collectorId === collectorId)?.quantity || 0;
       const shouldHold = itemIds.includes(i.id);
-      if (shouldHold && i.heldById !== collectorId && !i.heldById) {
-        return { ...i, heldById: collectorId, heldByName: collector?.name || '', updatedAt: nowIso() };
+      if (shouldHold && !currentQty && heldQuantity(i) === 0) {
+        return { ...i, holders: [...i.holders, { collectorId, collectorName: collector?.name || '', quantity: i.quantity }], updatedAt: nowIso() };
       }
-      if (!shouldHold && i.heldById === collectorId) {
-        return { ...i, heldById: '', heldByName: '', updatedAt: nowIso() };
+      if (!shouldHold && currentQty) {
+        return { ...i, holders: i.holders.filter(h => h.collectorId !== collectorId), updatedAt: nowIso() };
       }
       return i;
     }));
     showToast(`Updated ${collector?.name || 'collector'}'s equipment.`);
+  };
+
+  // Give some (not necessarily all) of an item's remaining stock to a collector.
+  // Adds to their existing holding of this item if they already have some.
+  const assignInventoryQuantity = (itemId: string, collectorId: string, quantity: number) => {
+    const collector = users.find(u => u.id === collectorId);
+    const item = inventory.find(i => i.id === itemId);
+    if (!item || !collector || quantity <= 0) return;
+    if (quantity > availableQuantity(item)) {
+      showToast(`Only ${availableQuantity(item)} of "${item.name}" left in stock.`);
+      return;
+    }
+    setInventory(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      const existing = i.holders.find(h => h.collectorId === collectorId);
+      const holders = existing
+        ? i.holders.map(h => (h.collectorId === collectorId ? { ...h, quantity: h.quantity + quantity } : h))
+        : [...i.holders, { collectorId, collectorName: collector.name, quantity }];
+      return { ...i, holders, updatedAt: nowIso() };
+    }));
+    showToast(`Assigned ${quantity} × "${item.name}" to ${collector.name}.`);
   };
 
   // ---- assignment handlers ----
@@ -663,29 +688,37 @@ export default function App() {
     }));
   };
 
-  // Check an item back in from whoever holds it, with a condition check.
-  const returnInventoryItem = (itemId: string, ok: boolean, note: string) => {
+  // Check some or all of one collector's held quantity of an item back in.
+  const returnInventoryItem = (itemId: string, collectorId: string, quantity: number, ok: boolean, note: string) => {
     setInventory(prev => prev.map(i => {
       if (i.id !== itemId) return i;
+      const holder = i.holders.find(h => h.collectorId === collectorId);
+      if (!holder) return i;
+      const qty = Math.min(quantity, holder.quantity);
+      if (qty <= 0) return i;
       const record: ReturnRecord = {
         date: todayStr(),
         ok,
         note: ok ? '' : note.trim(),
         byName: currentUser?.name || 'Admin',
-        fromCollectorName: i.heldByName || '',
+        fromCollectorId: collectorId,
+        fromCollectorName: holder.collectorName,
+        quantity: qty,
       };
+      const holders = qty >= holder.quantity
+        ? i.holders.filter(h => h.collectorId !== collectorId)
+        : i.holders.map(h => (h.collectorId === collectorId ? { ...h, quantity: h.quantity - qty } : h));
       return {
         ...i,
-        heldById: '',
-        heldByName: '',
-        condition: ok ? 'OK' : 'Flagged',
-        conditionNote: ok ? '' : note.trim(),
+        holders,
+        condition: ok ? i.condition : 'Flagged',
+        conditionNote: ok ? i.conditionNote : note.trim(),
         returnLog: [record, ...i.returnLog].slice(0, 50),
         updatedAt: nowIso(),
       };
     }));
     const nm = inventory.find(i => i.id === itemId)?.name || 'item';
-    showToast(ok ? `Checked in "${nm}".` : `Checked in "${nm}" — flagged.`);
+    showToast(ok ? `Checked in ${quantity} × "${nm}".` : `Checked in ${quantity} × "${nm}" — flagged.`);
   };
 
   const clearItemFlag = (itemId: string) => {
@@ -776,7 +809,9 @@ export default function App() {
     askConfirm(`Delete the login "${target.name}"? This can't be undone.`, () => {
       // Return any equipment they held to stock so nothing is left dangling.
       setInventory(prev => prev.map(i => (
-        i.heldById === id ? { ...i, heldById: '', heldByName: '', updatedAt: nowIso() } : i
+        i.holders.some(h => h.collectorId === id)
+          ? { ...i, holders: i.holders.filter(h => h.collectorId !== id), updatedAt: nowIso() }
+          : i
       )));
       setUsers(prev => prev.filter(u => u.id !== id));
       showToast('Login deleted.');
@@ -811,9 +846,9 @@ export default function App() {
   const canCollect = currentUser ? CAN_COLLECT.includes(currentUser.role) : false;
 
   // Items currently held by a collector (fixed kit, kept across all their sites).
-  const itemsOutCount = useMemo(() => inventory.filter(i => i.heldById).length, [inventory]);
+  const itemsOutCount = useMemo(() => inventory.filter(i => i.holders.length > 0).length, [inventory]);
   const myKit = useMemo(
-    () => (currentUser ? inventory.filter(i => i.heldById === currentUser.id) : []),
+    () => (currentUser ? inventory.filter(i => i.holders.some(h => h.collectorId === currentUser.id)) : []),
     [inventory, currentUser]
   );
   // ---- render gates ----
@@ -875,6 +910,7 @@ export default function App() {
             onAddBatch={addInventoryBatch}
             onDelete={deleteInventoryItem}
             onClearFlag={clearItemFlag}
+            onAssign={assignInventoryQuantity}
           />
         )}
         {role === 'Admin' && activeTab === 'returns' && (

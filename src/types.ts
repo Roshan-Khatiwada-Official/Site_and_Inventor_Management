@@ -93,7 +93,19 @@ export interface ReturnRecord {
   ok: boolean;                // everything in good condition?
   note: string;               // problem description if not ok
   byName: string;             // admin who processed the return
-  fromCollectorName: string;  // collector the item came back from
+  fromCollectorId: string;    // collector the item came back from
+  fromCollectorName: string;  // denormalised
+  quantity: number;           // how many units were checked in this time
+}
+
+// A field worker holding some (not necessarily all) of an item's stock.
+// Several holders can share the same item's quantity at once, e.g. 30
+// cables in stock can be split 10 / 8 / 12 across three different people
+// while some stay unassigned.
+export interface InventoryHolder {
+  collectorId: string;
+  collectorName: string;      // denormalised
+  quantity: number;           // units this collector currently holds
 }
 
 export interface InventoryItem {
@@ -101,12 +113,11 @@ export interface InventoryItem {
   itemId: string;             // human-readable code (required)
   name: string;               // required
   category: string;           // optional
-  quantity: number;           // optional
+  quantity: number;           // total stock of this item, across in-stock + assigned
   note: string;               // optional
   condition: 'OK' | 'Flagged'; // set to Flagged on a problem return
   conditionNote: string;      // what's wrong, if flagged
-  heldById: string;           // Data Collector currently holding it ('' = in stock)
-  heldByName: string;         // denormalised
+  holders: InventoryHolder[]; // who currently holds how much of this item ([] = fully in stock)
   returnLog: ReturnRecord[];  // check-in history
   createdAt: string;
   updatedAt: string;

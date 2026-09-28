@@ -61,7 +61,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, invent
                   <td className="px-4 py-2.5 font-mono text-slate-400">{u.password}</td>
                   <td className="px-4 py-2.5 text-slate-600">{u.role}</td>
                   <td className="px-4 py-2.5 text-slate-600">
-                    {CAN_COLLECT.includes(u.role) ? inventory.filter(i => i.heldById === u.id).length : '—'}
+                    {CAN_COLLECT.includes(u.role) ? inventory.filter(i => i.holders.some(h => h.collectorId === u.id)).length : '—'}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
@@ -105,16 +105,17 @@ const KitModal: React.FC<{
   onSave: (itemIds: string[]) => void;
 }> = ({ collector, inventory, onClose, onSave }) => {
   const [picked, setPicked] = useState<string[]>(
-    inventory.filter(i => i.heldById === collector.id).map(i => i.id)
+    inventory.filter(i => i.holders.some(h => h.collectorId === collector.id)).map(i => i.id)
   );
   const [q, setQ] = useState('');
 
   const add = (id: string) => setPicked(p => (p.includes(id) ? p : [...p, id]));
   const remove = (id: string) => setPicked(p => p.filter(x => x !== id));
 
-  // Choosable now: in stock, or already this collector's, not already picked.
+  // Choosable now: fully in stock, or already wholly this collector's, not already picked.
+  // Items split across multiple people are managed from Inventory → Assign instead.
   const available = inventory
-    .filter(i => (!i.heldById || i.heldById === collector.id) && !picked.includes(i.id))
+    .filter(i => (i.holders.length === 0 || (i.holders.length === 1 && i.holders[0].collectorId === collector.id)) && !picked.includes(i.id))
     .filter(i => {
       const t = q.toLowerCase();
       return !t || i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t);
@@ -246,7 +247,7 @@ const UserModal: React.FC<{
   };
 
   const field = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none';
-  const kitCount = user ? inventory.filter(i => i.heldById === user.id).length : 0;
+  const kitCount = user ? inventory.filter(i => i.holders.some(h => h.collectorId === user.id)).length : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
