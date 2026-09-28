@@ -727,9 +727,14 @@ export default function App() {
     showToast(ok ? `Checked in ${quantity} × "${nm}".` : `Checked in ${quantity} × "${nm}" — flagged.`);
   };
 
-  const clearItemFlag = (itemId: string) => {
-    setInventory(prev => prev.map(i => (i.id === itemId ? { ...i, condition: 'OK', conditionNote: '', updatedAt: nowIso() } : i)));
-    showToast('Flag cleared.');
+  // Set an item's condition directly — to resolve a pending Flagged item into
+  // Damaged/Lost/OK after review, or to report Damaged/Lost/Flagged right away.
+  const setItemCondition = (itemId: string, condition: InventoryItem['condition'], note: string) => {
+    setInventory(prev => prev.map(i => (
+      i.id === itemId ? { ...i, condition, conditionNote: condition === 'OK' ? '' : note.trim(), updatedAt: nowIso() } : i
+    )));
+    const labels: Record<InventoryItem['condition'], string> = { OK: 'Cleared', Flagged: 'Flagged', Damaged: 'Marked damaged', Lost: 'Marked lost' };
+    showToast(`${labels[condition]}.`);
   };
 
   // ---- request handlers ----
@@ -915,7 +920,7 @@ export default function App() {
             onSave={saveInventoryItem}
             onAddBatch={addInventoryBatch}
             onDelete={deleteInventoryItem}
-            onClearFlag={clearItemFlag}
+            onSetCondition={setItemCondition}
             onAssign={assignInventoryQuantity}
             onReturn={returnInventoryItem}
           />

@@ -35,7 +35,7 @@ export function sanitizeInventoryItem(raw: any): InventoryItem {
     category: raw.category || '',
     quantity: Number(raw.quantity) || 0,
     note: raw.note || '',
-    condition: raw.condition === 'Flagged' ? 'Flagged' : 'OK',
+    condition: ['Flagged', 'Damaged', 'Lost'].includes(raw.condition) ? raw.condition : 'OK',
     conditionNote: raw.conditionNote || '',
     holders,
     returnLog,

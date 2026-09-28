@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, X, Package, Search, AlertTriangle, ListPlus, UserPlus, Undo2, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Package, Search, AlertTriangle, ListPlus, UserPlus, Undo2, CheckCircle2, Wrench, PackageX, ShieldAlert } from 'lucide-react';
 import { InventoryItem, UserAccount } from '../types';
 import { todayStr, byNewest } from '../utils/storage';
 import { heldQuantity, availableQuantity } from '../utils/inventory';
 import { CheckInModal } from './CheckInModal';
+
+type Condition = InventoryItem['condition'];
+
+const CONDITION_STYLE: Record<Exclude<Condition, 'OK'>, { label: string; badge: string; icon: React.ElementType }> = {
+  Flagged: { label: 'Flagged', badge: 'bg-amber-50 text-amber-700 border border-amber-200', icon: AlertTriangle },
+  Damaged: { label: 'Damaged', badge: 'bg-rose-50 text-rose-700 border border-rose-200', icon: Wrench },
+  Lost: { label: 'Lost', badge: 'bg-slate-100 text-slate-600 border border-slate-300', icon: PackageX },
+};
 
 interface CheckInTarget {
   item: InventoryItem;
@@ -18,20 +26,23 @@ interface InventoryViewProps {
   onSave: (item: InventoryItem) => void;
   onAddBatch: (items: InventoryItem[]) => void;
   onDelete: (id: string) => void;
-  onClearFlag: (id: string) => void;
+  onSetCondition: (id: string, condition: Condition, note: string) => void;
   onAssign: (itemId: string, collectorId: string, quantity: number) => void;
   onReturn: (itemId: string, collectorId: string, quantity: number, ok: boolean, note: string) => void;
 }
 
-export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCollectors, onSave, onAddBatch, onDelete, onClearFlag, onAssign, onReturn }) => {
+type StatusFilter = '' | 'In stock' | 'Assigned' | 'Flagged' | 'Damaged' | 'Lost';
+
+export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCollectors, onSave, onAddBatch, onDelete, onSetCondition, onAssign, onReturn }) => {
   const [open, setOpen] = useState(false);
   const [seqOpen, setSeqOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [assigning, setAssigning] = useState<InventoryItem | null>(null);
   const [checkingIn, setCheckingIn] = useState<CheckInTarget | null>(null);
+  const [settingCondition, setSettingCondition] = useState<InventoryItem | null>(null);
   const [q, setQ] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'' | 'In stock' | 'Assigned'>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [workerFilter, setWorkerFilter] = useState('');
 
   const categories = useMemo(
@@ -43,7 +54,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
     const t = q.toLowerCase();
     const matchesQ = i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t) || i.category.toLowerCase().includes(t);
     const matchesCategory = !categoryFilter || i.category === categoryFilter;
-    const matchesStatus = !statusFilter || (statusFilter === 'Assigned' ? heldQuantity(i) > 0 : availableQuantity(i) > 0);
+    const matchesStatus = !statusFilter
+      || (statusFilter === 'Assigned' ? heldQuantity(i) > 0
+        : statusFilter === 'In stock' ? availableQuantity(i) > 0
+          : i.condition === statusFilter);
     const matchesWorker = !workerFilter || i.holders.some(h => h.collectorId === workerFilter);
     return matchesQ && matchesCategory && matchesStatus && matchesWorker;
   }).sort(byNewest);
@@ -101,6 +115,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
           <option value="">All statuses</option>
           <option value="In stock">In stock</option>
           <option value="Assigned">Assigned</option>
+          <option value="Flagged">Flagged</option>
+          <option value="Damaged">Damaged</option>
+          <option value="Lost">Lost</option>
         </select>
         <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}
           className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -135,15 +152,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
               {filtered.map(i => {
                 const held = heldQuantity(i);
                 const available = availableQuantity(i);
+                const conditionStyle = i.condition !== 'OK' ? CONDITION_STYLE[i.condition] : null;
                 return (
                   <tr key={i.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5 font-mono text-slate-500">{i.itemId}</td>
                     <td className="px-4 py-2.5 font-medium text-slate-900">
                       {i.name}
                       {i.note && <div className="text-[11px] text-slate-400 font-normal truncate max-w-[220px]">{i.note}</div>}
-                      {i.condition === 'Flagged' && (
+                      {conditionStyle && (
                         <div className="text-[11px] text-rose-600 font-normal flex items-center gap-1 mt-0.5">
-                          <AlertTriangle className="w-3 h-3" /> {i.conditionNote || 'Reported problem'}
+                          <conditionStyle.icon className="w-3 h-3" /> {i.conditionNote || conditionStyle.label}
                         </div>
                       )}
                     </td>
@@ -161,8 +179,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
                             {held} assigned
                           </span>
                         )}
-                        {held === 0 && available === 0 && i.condition === 'Flagged' && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">Flagged</span>
+                        {conditionStyle && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${conditionStyle.badge}`}>
+                            <conditionStyle.icon className="w-3 h-3" /> {conditionStyle.label}
+                          </span>
                         )}
                       </div>
                       {i.holders.length > 0 && (
@@ -181,9 +201,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      {i.condition === 'Flagged' && held === 0 && (
-                        <button onClick={() => onClearFlag(i.id)} className="text-emerald-600 hover:underline mr-3">Clear flag</button>
-                      )}
+                      <button onClick={() => setSettingCondition(i)}
+                        className={`p-1.5 rounded hover:bg-slate-100 ${conditionStyle ? 'text-amber-600 hover:text-amber-700' : 'text-slate-400 hover:text-blue-600'}`}
+                        title={conditionStyle ? `${conditionStyle.label} — review or update` : 'Report damaged / lost / a problem'}>
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      </button>
                       {available > 0 && dataCollectors.length > 0 && (
                         <button onClick={() => setAssigning(i)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded" title="Assign to a field worker">
                           <UserPlus className="w-3.5 h-3.5" />
@@ -258,6 +280,90 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
           onConfirm={(qty, ok, note) => { onReturn(checkingIn.item.id, checkingIn.collectorId, qty, ok, note); setCheckingIn(null); }}
         />
       )}
+      {settingCondition && (
+        <ConditionModal
+          item={settingCondition}
+          onClose={() => setSettingCondition(null)}
+          onSave={(condition, note) => { onSetCondition(settingCondition.id, condition, note); setSettingCondition(null); }}
+        />
+      )}
+    </div>
+  );
+};
+
+/** Report a problem, or review/resolve one — set an item's condition directly. */
+const ConditionModal: React.FC<{
+  item: InventoryItem;
+  onClose: () => void;
+  onSave: (condition: Condition, note: string) => void;
+}> = ({ item, onClose, onSave }) => {
+  const [condition, setCondition] = useState<Condition>(item.condition === 'OK' ? 'Flagged' : item.condition);
+  const [note, setNote] = useState(item.conditionNote || '');
+  const [error, setError] = useState<string | null>(null);
+
+  const options: { value: Condition; label: string; hint: string }[] = [
+    { value: 'Flagged', label: 'Flagged', hint: 'Pending review' },
+    { value: 'Damaged', label: 'Damaged', hint: 'Confirmed broken' },
+    { value: 'Lost', label: 'Lost', hint: 'Missing / not returned' },
+    { value: 'OK', label: 'Clear (OK)', hint: 'Fine after all' },
+  ];
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (condition !== 'OK' && !note.trim()) { setError('Add a short note on what happened.'); return; }
+    onSave(condition, note);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-white sm:rounded-2xl w-full sm:max-w-sm h-full sm:h-auto border border-slate-200 shadow-xl flex flex-col">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center"><ShieldAlert className="w-4 h-4" /></div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Item Condition</h3>
+              <p className="text-[11px] text-slate-500">{item.name} · {item.itemId}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
+          {item.condition !== 'OK' && (
+            <p className="text-slate-500">
+              Currently <strong className="text-slate-800">{CONDITION_STYLE[item.condition].label}</strong>
+              {item.conditionNote && <>: {item.conditionNote}</>}
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {options.map(o => (
+              <label key={o.value}
+                className={`flex items-center justify-between gap-2 px-3 py-2 border rounded-lg cursor-pointer ${condition === o.value ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                <span className="flex items-center gap-2">
+                  <input type="radio" name="condition" checked={condition === o.value} onChange={() => setCondition(o.value)} />
+                  <span className="font-semibold text-slate-800">{o.label}</span>
+                </span>
+                <span className="text-[11px] text-slate-400">{o.hint}</span>
+              </label>
+            ))}
+          </div>
+          {condition !== 'OK' && (
+            <div>
+              <label className="block font-semibold mb-1">Note *</label>
+              <textarea rows={3} value={note} onChange={e => setNote(e.target.value)}
+                placeholder="What happened?"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+          )}
+
+          {error && <p className="text-rose-600 text-[11px] font-medium">{error}</p>}
+
+          <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>
+            <button type="submit" className="px-5 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm">Save</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

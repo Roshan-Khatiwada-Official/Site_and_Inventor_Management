@@ -115,8 +115,10 @@ export interface InventoryItem {
   category: string;           // optional
   quantity: number;           // total stock of this item, across in-stock + assigned
   note: string;               // optional
-  condition: 'OK' | 'Flagged'; // set to Flagged on a problem return
-  conditionNote: string;      // what's wrong, if flagged
+  // Flagged = a check-in reported a problem, pending review. Damaged/Lost are
+  // the reviewed outcome — set either from a Flagged item or directly at any time.
+  condition: 'OK' | 'Flagged' | 'Damaged' | 'Lost';
+  conditionNote: string;      // what's wrong, if not OK
   holders: InventoryHolder[]; // who currently holds how much of this item ([] = fully in stock)
   returnLog: ReturnRecord[];  // check-in history
   createdAt: string;

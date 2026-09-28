@@ -86,7 +86,7 @@ function normalize(raw: any): AppData {
         category: i.category || '',
         quantity: Number(i.quantity) || 0,
         note: i.note || '',
-        condition: i.condition === 'Flagged' ? 'Flagged' : 'OK',
+        condition: ['Flagged', 'Damaged', 'Lost'].includes(i.condition) ? i.condition : 'OK',
         conditionNote: i.conditionNote || '',
         holders,
         returnLog: arr<any>(i.returnLog).map((r: any): ReturnRecord => ({
