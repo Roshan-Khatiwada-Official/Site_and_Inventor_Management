@@ -878,7 +878,7 @@ export default function App() {
           />
         )}
         {role === 'Admin' && activeTab === 'returns' && (
-          <ReturnsView inventory={inventory} onReturn={returnInventoryItem} />
+          <ReturnsView inventory={inventory} dataCollectors={dataCollectors} onReturn={returnInventoryItem} />
         )}
         {role === 'Admin' && activeTab === 'assignments' && (
           <AssignmentsView

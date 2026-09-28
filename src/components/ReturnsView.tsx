@@ -1,25 +1,35 @@
 import React, { useMemo, useState } from 'react';
 import { X, PackageCheck, Undo2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { InventoryItem } from '../types';
+import { InventoryItem, UserAccount } from '../types';
 import { byNewest } from '../utils/storage';
 
 interface ReturnsViewProps {
   inventory: InventoryItem[];
+  dataCollectors: UserAccount[];
   onReturn: (itemId: string, ok: boolean, note: string) => void;
 }
 
-export const ReturnsView: React.FC<ReturnsViewProps> = ({ inventory, onReturn }) => {
+export const ReturnsView: React.FC<ReturnsViewProps> = ({ inventory, dataCollectors, onReturn }) => {
   const [target, setTarget] = useState<InventoryItem | null>(null);
+  const [workerFilter, setWorkerFilter] = useState('');
 
-  const held = useMemo(() => [...inventory.filter(i => i.heldById)].sort(byNewest), [inventory]);
+  const held = useMemo(
+    () => [...inventory.filter(i => i.heldById && (!workerFilter || i.heldById === workerFilter))].sort(byNewest),
+    [inventory, workerFilter]
+  );
+
+  const heldWorkerName = dataCollectors.find(c => c.id === workerFilter)?.name || '';
 
   const recent = useMemo(() => {
     const list: { itemName: string; ok: boolean; note: string; date: string; from: string }[] = [];
     inventory.forEach(i => i.returnLog.forEach(r =>
       list.push({ itemName: i.name, ok: r.ok, note: r.note, date: r.date, from: r.fromCollectorName })
     ));
-    return list.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
-  }, [inventory]);
+    return list
+      .filter(r => !workerFilter || r.from === heldWorkerName)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 20);
+  }, [inventory, workerFilter, heldWorkerName]);
 
   return (
     <div className="space-y-6">
@@ -28,6 +38,17 @@ export const ReturnsView: React.FC<ReturnsViewProps> = ({ inventory, onReturn })
         <p className="text-xs text-slate-500">
           Each data collector keeps a fixed set of equipment across all their sites. Check items back in only when they hand them over.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All field workers</option>
+          {dataCollectors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        {workerFilter && (
+          <button onClick={() => setWorkerFilter('')} className="text-xs text-blue-600 hover:underline">Clear filter</button>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">

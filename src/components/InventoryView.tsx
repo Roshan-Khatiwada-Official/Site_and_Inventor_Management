@@ -17,11 +17,29 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
   const [seqOpen, setSeqOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [q, setQ] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'' | 'In stock' | 'Assigned'>('');
+  const [workerFilter, setWorkerFilter] = useState('');
+
+  const categories = useMemo(
+    () => Array.from(new Set(inventory.map(i => i.category).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [inventory]
+  );
 
   const filtered = inventory.filter(i => {
     const t = q.toLowerCase();
-    return i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t) || i.category.toLowerCase().includes(t);
+    const matchesQ = i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t) || i.category.toLowerCase().includes(t);
+    const matchesCategory = !categoryFilter || i.category === categoryFilter;
+    const matchesStatus = !statusFilter || (statusFilter === 'Assigned' ? !!i.heldById : !i.heldById);
+    const matchesWorker = !workerFilter || i.heldById === workerFilter;
+    return matchesQ && matchesCategory && matchesStatus && matchesWorker;
   }).sort(byNewest);
+
+  const workerCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    inventory.forEach(i => { if (i.heldById) map.set(i.heldById, (map.get(i.heldById) || 0) + (i.quantity || 1)); });
+    return map;
+  }, [inventory]);
 
   return (
     <div className="space-y-4">
@@ -46,6 +64,31 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ inventory, dataCol
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search inventory…"
           className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All statuses</option>
+          <option value="In stock">In stock</option>
+          <option value="Assigned">Assigned</option>
+        </select>
+        <select value={workerFilter} onChange={e => setWorkerFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All field workers</option>
+          {dataCollectors.map(c => (
+            <option key={c.id} value={c.id}>{c.name} ({workerCounts.get(c.id) || 0})</option>
+          ))}
+        </select>
+        {(categoryFilter || statusFilter || workerFilter) && (
+          <button onClick={() => { setCategoryFilter(''); setStatusFilter(''); setWorkerFilter(''); }}
+            className="text-xs text-blue-600 hover:underline">Clear filters</button>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
