@@ -119,6 +119,17 @@ export interface InventoryIssue {
   quantity: number;
   note: string;
   reportedAt: string;
+  reportedByCollectorId?: string;   // who it was pulled from (check-in or a direct report against a holder) — '' / absent if reported straight from stock
+  reportedByCollectorName?: string; // denormalised
+}
+
+// A resolved issue, kept as a record so it's clear who reported the
+// problem, who resolved it and how, and when — e.g. a Flagged item that
+// turned out fine gets "Cleared" here instead of just vanishing.
+export interface ResolvedIssue extends InventoryIssue {
+  outcome: 'Cleared' | 'Damaged' | 'Lost';
+  resolvedAt: string;
+  resolvedByName: string;
 }
 
 export interface InventoryItem {
@@ -129,6 +140,7 @@ export interface InventoryItem {
   quantity: number;           // total stock of this item, across in-stock + assigned + issues
   note: string;               // optional
   issues: InventoryIssue[];   // units currently flagged / damaged / lost ([] = none)
+  resolvedIssues: ResolvedIssue[]; // history of issues that were cleared or reclassified
   holders: InventoryHolder[]; // who currently holds how much of this item ([] = fully in stock)
   returnLog: ReturnRecord[];  // check-in history
   createdAt: string;

@@ -17,6 +17,7 @@ import {
   Site,
   InventoryItem,
   InventoryIssue,
+  ResolvedIssue,
   Assignment,
   SiteRequest,
   UserAccount,
@@ -719,7 +720,15 @@ export default function App() {
         : i.holders.map(h => (h.collectorId === collectorId ? { ...h, quantity: h.quantity - qty } : h));
       const issues = ok ? i.issues : [
         ...i.issues,
-        { id: `iss-${Date.now()}`, condition: 'Flagged' as const, quantity: qty, note: note.trim(), reportedAt: nowIso() },
+        {
+          id: `iss-${Date.now()}`,
+          condition: 'Flagged' as const,
+          quantity: qty,
+          note: note.trim(),
+          reportedAt: nowIso(),
+          reportedByCollectorId: collectorId,
+          reportedByCollectorName: holder.collectorName,
+        },
       ];
       return {
         ...i,
@@ -747,16 +756,26 @@ export default function App() {
     setInventory(prev => prev.map(i => {
       if (i.id !== itemId) return i;
       let holders = i.holders;
+      let reportedByCollectorName: string | undefined;
       if (sourceCollectorId) {
         const holder = i.holders.find(h => h.collectorId === sourceCollectorId);
         if (!holder || quantity > holder.quantity) return i;
+        reportedByCollectorName = holder.collectorName;
         holders = quantity >= holder.quantity
           ? i.holders.filter(h => h.collectorId !== sourceCollectorId)
           : i.holders.map(h => (h.collectorId === sourceCollectorId ? { ...h, quantity: h.quantity - quantity } : h));
       } else if (quantity > availableQuantity(i)) {
         return i;
       }
-      const issue: InventoryIssue = { id: `iss-${Date.now()}`, condition, quantity, note: note.trim(), reportedAt: nowIso() };
+      const issue: InventoryIssue = {
+        id: `iss-${Date.now()}`,
+        condition,
+        quantity,
+        note: note.trim(),
+        reportedAt: nowIso(),
+        reportedByCollectorId: sourceCollectorId || undefined,
+        reportedByCollectorName,
+      };
       return { ...i, holders, issues: [...i.issues, issue], updatedAt: nowIso() };
     }));
     const nm = inventory.find(i => i.id === itemId)?.name || 'item';
@@ -764,7 +783,10 @@ export default function App() {
   };
 
   // Resolve a reported issue: return its units to stock, or reclassify a
-  // pending Flagged issue into a confirmed Damaged/Lost outcome.
+  // pending Flagged issue into a confirmed Damaged/Lost outcome. Either way,
+  // the original report is kept in resolvedIssues (who reported it, who
+  // resolved it, when, and how) rather than just disappearing — so it stays
+  // clear who's accountable if the same item shows a problem again later.
   const resolveItemIssue = (
     itemId: string,
     issueId: string,
@@ -775,10 +797,19 @@ export default function App() {
       const issue = i.issues.find(x => x.id === issueId);
       if (!issue) return i;
       const issues = i.issues.filter(x => x.id !== issueId);
+      const resolvedIssues: ResolvedIssue[] = [
+        {
+          ...issue,
+          outcome: (action.type === 'clear' ? 'Cleared' : action.condition) as ResolvedIssue['outcome'],
+          resolvedAt: nowIso(),
+          resolvedByName: currentUser?.name || 'Admin',
+        },
+        ...i.resolvedIssues,
+      ].slice(0, 100);
       if (action.type === 'reclassify') {
-        issues.push({ ...issue, condition: action.condition, note: action.note.trim() || issue.note, reportedAt: nowIso() });
+        issues.push({ ...issue, id: `iss-${Date.now()}`, condition: action.condition, note: action.note.trim() || issue.note, reportedAt: nowIso() });
       }
-      return { ...i, issues, updatedAt: nowIso() };
+      return { ...i, issues, resolvedIssues, updatedAt: nowIso() };
     }));
     showToast(action.type === 'clear' ? 'Cleared — back in stock.' : `Marked ${action.condition.toLowerCase()}.`);
   };

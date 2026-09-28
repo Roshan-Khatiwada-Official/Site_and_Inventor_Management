@@ -1,4 +1,4 @@
-import { InventoryItem, InventoryHolder, InventoryIssue, ReturnRecord } from '../types';
+import { InventoryItem, InventoryHolder, InventoryIssue, ResolvedIssue, ReturnRecord } from '../types';
 
 const ISSUE_CONDITIONS = ['Flagged', 'Damaged', 'Lost'];
 
@@ -28,6 +28,8 @@ export function sanitizeInventoryItem(raw: any): InventoryItem {
         quantity: Number(x?.quantity) || 0,
         note: x?.note || '',
         reportedAt: x?.reportedAt || '',
+        reportedByCollectorId: x?.reportedByCollectorId || undefined,
+        reportedByCollectorName: x?.reportedByCollectorName || undefined,
       })).filter((x: InventoryIssue) => x.quantity > 0)
     : [];
   if (!issues.length && ISSUE_CONDITIONS.includes(raw.condition)) {
@@ -39,6 +41,20 @@ export function sanitizeInventoryItem(raw: any): InventoryItem {
       reportedAt: raw.updatedAt || raw.createdAt || '',
     }];
   }
+  const resolvedIssues: ResolvedIssue[] = Array.isArray(raw.resolvedIssues)
+    ? raw.resolvedIssues.map((x: any): ResolvedIssue => ({
+        id: String(x?.id || `res-legacy-${raw.id}-${Math.random().toString(36).slice(2)}`),
+        condition: ISSUE_CONDITIONS.includes(x?.condition) ? x.condition : 'Flagged',
+        quantity: Number(x?.quantity) || 0,
+        note: x?.note || '',
+        reportedAt: x?.reportedAt || '',
+        reportedByCollectorId: x?.reportedByCollectorId || undefined,
+        reportedByCollectorName: x?.reportedByCollectorName || undefined,
+        outcome: ['Cleared', 'Damaged', 'Lost'].includes(x?.outcome) ? x.outcome : 'Cleared',
+        resolvedAt: x?.resolvedAt || '',
+        resolvedByName: x?.resolvedByName || '',
+      }))
+    : [];
   const returnLog: ReturnRecord[] = Array.isArray(raw.returnLog)
     ? raw.returnLog.map((r: any): ReturnRecord => ({
         date: r?.date || '',
@@ -58,6 +74,7 @@ export function sanitizeInventoryItem(raw: any): InventoryItem {
     quantity: Number(raw.quantity) || 0,
     note: raw.note || '',
     issues,
+    resolvedIssues,
     holders,
     returnLog,
     createdAt: raw.createdAt || '',

@@ -14,6 +14,12 @@ const CONDITION_STYLE: Record<IssueCondition, { label: string; badge: string; ic
 };
 const ISSUE_CONDITIONS: IssueCondition[] = ['Flagged', 'Damaged', 'Lost'];
 
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (!iso || isNaN(d.getTime())) return iso || '';
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 interface CheckInTarget {
   item: InventoryItem;
   collectorId: string;
@@ -66,15 +72,51 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return matchesQ && matchesCategory && matchesStatus && matchesWorker;
   }).sort(byNewest);
 
-  const recentReturns = useMemo(() => {
-    const list: { itemName: string; ok: boolean; note: string; date: string; from: string; fromId: string; quantity: number }[] = [];
-    inventory.forEach(i => i.returnLog.forEach(r =>
-      list.push({ itemName: i.name, ok: r.ok, note: r.note, date: r.date, from: r.fromCollectorName, fromId: r.fromCollectorId, quantity: r.quantity })
-    ));
-    return list
-      .filter(r => !workerFilter || r.fromId === workerFilter)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 20);
+  // One feed of check-ins and issue resolutions, so it's clear both who
+  // returned/flagged an item and, separately, who later cleared or
+  // reclassified it — instead of a clear silently erasing that history.
+  const recentActivity = useMemo(() => {
+    type Row = { key: string; sortKey: string; dateLabel: string; node: React.ReactNode };
+    const rows: Row[] = [];
+    inventory.forEach(i => {
+      i.returnLog.forEach((r, idx) => {
+        if (workerFilter && r.fromCollectorId !== workerFilter) return;
+        rows.push({
+          key: `ret-${i.id}-${idx}`,
+          sortKey: r.date,
+          dateLabel: r.date,
+          node: (
+            <div className="flex items-center gap-2">
+              {r.ok ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+              <span className="font-medium text-slate-800">{r.quantity} × {i.name}</span>
+              {r.fromCollectorName && <span className="text-slate-400">from {r.fromCollectorName}</span>}
+              {!r.ok && r.note && <span className="text-rose-600">— {r.note}</span>}
+            </div>
+          ),
+        });
+      });
+      i.resolvedIssues.forEach(x => {
+        if (workerFilter && x.reportedByCollectorId !== workerFilter) return;
+        const style = CONDITION_STYLE[x.condition];
+        const cleared = x.outcome === 'Cleared';
+        rows.push({
+          key: `res-${i.id}-${x.id}`,
+          sortKey: x.resolvedAt,
+          dateLabel: formatDateTime(x.resolvedAt),
+          node: (
+            <div className="flex items-center gap-2 flex-wrap">
+              {cleared ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <style.icon className="w-3.5 h-3.5 text-rose-500" />}
+              <span className="font-medium text-slate-800">
+                {cleared ? 'Cleared' : `Marked ${x.outcome}`}: {x.quantity} × {i.name}
+              </span>
+              {x.reportedByCollectorName && <span className="text-slate-400">— originally flagged by {x.reportedByCollectorName}</span>}
+              <span className="text-slate-400">by {x.resolvedByName}</span>
+            </div>
+          ),
+        });
+      });
+    });
+    return rows.sort((a, b) => b.sortKey.localeCompare(a.sortKey)).slice(0, 20);
   }, [inventory, workerFilter]);
 
   const workerCounts = useMemo(() => {
@@ -232,19 +274,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       </div>
 
-      {recentReturns.length > 0 && (
+      {recentActivity.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-100 text-xs font-bold text-slate-700">Recent check-ins</div>
           <div className="divide-y divide-slate-100">
-            {recentReturns.map((r, idx) => (
-              <div key={idx} className="px-4 py-2.5 text-xs flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  {r.ok ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />}
-                  <span className="font-medium text-slate-800">{r.quantity} × {r.itemName}</span>
-                  {r.from && <span className="text-slate-400">from {r.from}</span>}
-                  {!r.ok && r.note && <span className="text-rose-600">— {r.note}</span>}
-                </div>
-                <span className="text-slate-400">{r.date}</span>
+            {recentActivity.map(row => (
+              <div key={row.key} className="px-4 py-2.5 text-xs flex items-center justify-between gap-3">
+                {row.node}
+                <span className="text-slate-400 shrink-0">{row.dateLabel}</span>
               </div>
             ))}
           </div>
@@ -539,6 +576,7 @@ const InventoryModal: React.FC<{
       quantity: qty,
       note: note.trim(),
       issues: item ? item.issues : [],
+      resolvedIssues: item ? item.resolvedIssues : [],
       holders: item ? item.holders : (collector ? [{ collectorId: collector.id, collectorName: collector.name, quantity: qty }] : []),
       returnLog: item ? item.returnLog : [],
       createdAt: item ? item.createdAt : todayStr(),
@@ -663,6 +701,7 @@ const SequentialModal: React.FC<{
       quantity: Number(quantityEach) || 0,
       note: note.trim(),
       issues: [],
+      resolvedIssues: [],
       holders: collector ? [{ collectorId: collector.id, collectorName: collector.name, quantity: Number(quantityEach) || 0 }] : [],
       returnLog: [],
       createdAt: now,
