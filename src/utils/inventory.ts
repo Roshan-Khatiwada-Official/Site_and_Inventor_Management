@@ -49,8 +49,14 @@ export function heldQuantity(item: InventoryItem): number {
   return item.holders.reduce((sum, h) => sum + (h.quantity || 0), 0);
 }
 
-/** Units still sitting in stock, unassigned. */
+/**
+ * Units still sitting in stock, unassigned, and safe to hand out. A problem
+ * item (Flagged pending review, or confirmed Damaged/Lost) is never
+ * available — it needs to be resolved (Item Condition action) before it can
+ * be assigned again.
+ */
 export function availableQuantity(item: InventoryItem): number {
+  if (item.condition !== 'OK') return 0;
   return Math.max(0, (item.quantity || 0) - heldQuantity(item));
 }
 
