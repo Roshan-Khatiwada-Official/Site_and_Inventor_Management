@@ -43,7 +43,6 @@ import { CollectionReportView } from './components/CollectionReportView';
 import { AvailableSitesView } from './components/AvailableSitesView';
 import { MyWorkView } from './components/MyWorkView';
 import { UsersView } from './components/UsersView';
-import { ReturnsView } from './components/ReturnsView';
 import { ProfileModal } from './components/ProfileModal';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ConfirmDialog, ConfirmState } from './components/ConfirmDialog';
@@ -531,7 +530,7 @@ export default function App() {
     const item = inventory.find(i => i.id === id);
     if (!item) return;
     if (currentUser?.role !== 'Admin' && heldQuantity(item) > 0) {
-      showToast('That item is held by a collector — check it in first (Returns tab).');
+      showToast('That item is held by a collector — check it in first.');
       return;
     }
     askConfirm(`Delete "${item.name}"? This can't be undone.`, () => {
@@ -918,10 +917,8 @@ export default function App() {
             onDelete={deleteInventoryItem}
             onClearFlag={clearItemFlag}
             onAssign={assignInventoryQuantity}
+            onReturn={returnInventoryItem}
           />
-        )}
-        {role === 'Admin' && activeTab === 'returns' && (
-          <ReturnsView inventory={inventory} dataCollectors={dataCollectors} onReturn={returnInventoryItem} />
         )}
         {role === 'Admin' && activeTab === 'assignments' && (
           <AssignmentsView
@@ -1006,7 +1003,7 @@ export default function App() {
 }
 
 function roleTabIds(role: UserAccount['role']): string[] {
-  if (role === 'Admin') return ['sites', 'inventory', 'returns', 'assignments', 'requests', 'reports', 'shootreport', 'users'];
+  if (role === 'Admin') return ['sites', 'inventory', 'assignments', 'requests', 'reports', 'shootreport', 'users'];
   if (role === 'Site Finder') return ['mysites'];
   if (role === 'Field Worker') return ['mysites', 'available', 'mywork'];
   return ['available', 'mywork'];

@@ -18,7 +18,6 @@ const TABS: Record<UserAccount['role'], { id: string; label: string }[]> = {
   Admin: [
     { id: 'sites', label: 'Sites' },
     { id: 'inventory', label: 'Inventory' },
-    { id: 'returns', label: 'Returns' },
     { id: 'assignments', label: 'Assignments' },
     { id: 'requests', label: 'Requests' },
     { id: 'reports', label: 'Reports' },
@@ -123,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {pendingRequestCount}
                   </span>
                 )}
-                {t.id === 'returns' && outCount > 0 && (
+                {t.id === 'inventory' && outCount > 0 && (
                   <span className="bg-slate-500 text-white text-[10px] font-bold px-1.5 rounded-full">
                     {outCount}
                   </span>
