@@ -108,17 +108,27 @@ export interface InventoryHolder {
   quantity: number;           // units this collector currently holds
 }
 
+// A count of this item's stock pulled out of circulation for a reason —
+// e.g. 1 of 10 cables lost, 2 damaged — tracked separately from the rest so
+// only the genuinely-fine units count as in-stock/assignable. Flagged =
+// pending review (from a problem check-in); Damaged/Lost are the resolved
+// outcome. Several can coexist on one item (e.g. 1 Damaged and 1 Lost).
+export interface InventoryIssue {
+  id: string;
+  condition: 'Flagged' | 'Damaged' | 'Lost';
+  quantity: number;
+  note: string;
+  reportedAt: string;
+}
+
 export interface InventoryItem {
   id: string;
   itemId: string;             // human-readable code (required)
   name: string;               // required
   category: string;           // optional
-  quantity: number;           // total stock of this item, across in-stock + assigned
+  quantity: number;           // total stock of this item, across in-stock + assigned + issues
   note: string;               // optional
-  // Flagged = a check-in reported a problem, pending review. Damaged/Lost are
-  // the reviewed outcome — set either from a Flagged item or directly at any time.
-  condition: 'OK' | 'Flagged' | 'Damaged' | 'Lost';
-  conditionNote: string;      // what's wrong, if not OK
+  issues: InventoryIssue[];   // units currently flagged / damaged / lost ([] = none)
   holders: InventoryHolder[]; // who currently holds how much of this item ([] = fully in stock)
   returnLog: ReturnRecord[];  // check-in history
   createdAt: string;

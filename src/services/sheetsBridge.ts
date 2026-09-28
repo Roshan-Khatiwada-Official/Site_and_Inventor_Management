@@ -1,4 +1,5 @@
-import { Site, InventoryItem, InventoryHolder, Assignment, SiteRequest, UserAccount, ReturnRecord, CollectionSession } from '../types';
+import { Site, InventoryItem, Assignment, SiteRequest, UserAccount, CollectionSession } from '../types';
+import { sanitizeInventoryItem } from '../utils/inventory';
 
 /**
  * Client for the Google Apps Script "database bridge" (see /apps-script/Code.gs).
@@ -68,40 +69,9 @@ function normalize(raw: any): AppData {
       createdAt: s.createdAt || '',
       updatedAt: s.updatedAt || s.createdAt || '',
     })),
-    inventory: arr<any>(d.inventory).filter((i: any) => i && i.id).map((i: any): InventoryItem => {
-      // Items saved before multi-holder support used a single heldById/heldByName
-      // pair for the whole row. Migrate those into a one-entry holders list.
-      let holders: InventoryHolder[] = arr<any>(i.holders).map((h: any): InventoryHolder => ({
-        collectorId: String(h.collectorId || ''),
-        collectorName: h.collectorName || '',
-        quantity: Number(h.quantity) || 0,
-      })).filter(h => h.collectorId && h.quantity > 0);
-      if (!holders.length && i.heldById) {
-        holders = [{ collectorId: String(i.heldById), collectorName: i.heldByName || '', quantity: Number(i.quantity) || 1 }];
-      }
-      return {
-        id: String(i.id),
-        itemId: i.itemId || '',
-        name: i.name || '',
-        category: i.category || '',
-        quantity: Number(i.quantity) || 0,
-        note: i.note || '',
-        condition: ['Flagged', 'Damaged', 'Lost'].includes(i.condition) ? i.condition : 'OK',
-        conditionNote: i.conditionNote || '',
-        holders,
-        returnLog: arr<any>(i.returnLog).map((r: any): ReturnRecord => ({
-          date: r.date || '',
-          ok: r.ok !== false,
-          note: r.note || '',
-          byName: r.byName || '',
-          fromCollectorId: r.fromCollectorId || '',
-          fromCollectorName: r.fromCollectorName || '',
-          quantity: Number(r.quantity) || 1,
-        })),
-        createdAt: i.createdAt || '',
-        updatedAt: i.updatedAt || i.createdAt || '',
-      };
-    }),
+    // Migrates legacy single-holder/single-condition rows the same way stale
+    // localStorage data is migrated — see sanitizeInventoryItem.
+    inventory: arr<any>(d.inventory).filter((i: any) => i && i.id).map(sanitizeInventoryItem),
     assignments: arr<any>(d.assignments).filter((a: any) => a && a.id).map((a: any): Assignment => ({
       id: String(a.id),
       siteId: a.siteId || '',

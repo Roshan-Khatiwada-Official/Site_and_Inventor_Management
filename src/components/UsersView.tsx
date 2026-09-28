@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, ShieldCheck, Package, PlusCircle, MinusCircle } from 'lucide-react';
 import { UserAccount, UserRole, InventoryItem, CAN_COLLECT } from '../types';
 import { todayStr, byNewest } from '../utils/storage';
-import { availableQuantity } from '../utils/inventory';
+import { availableQuantity, issueQuantity } from '../utils/inventory';
 
 export interface KitPick {
   itemId: string;
@@ -169,7 +169,7 @@ const KitModal: React.FC<{
                     <span className="min-w-0">
                       <span className="font-mono text-slate-500">{item.itemId}</span>{' '}
                       <span className="text-slate-800">{item.name}</span>
-                      {item.condition === 'Flagged' && <span className="ml-1 text-[10px] text-rose-600">flagged</span>}
+                      {issueQuantity(item) > 0 && <span className="ml-1 text-[10px] text-rose-600">has a reported issue</span>}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {item.quantity > 1 && (

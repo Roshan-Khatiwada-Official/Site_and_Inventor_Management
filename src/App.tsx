@@ -16,6 +16,7 @@ import {
 import {
   Site,
   InventoryItem,
+  InventoryIssue,
   Assignment,
   SiteRequest,
   UserAccount,
@@ -695,6 +696,8 @@ export default function App() {
   };
 
   // Check some or all of one collector's held quantity of an item back in.
+  // A problem check-in pulls those units into a Flagged issue (pending
+  // review) rather than tainting the whole item — the rest stays fine.
   const returnInventoryItem = (itemId: string, collectorId: string, quantity: number, ok: boolean, note: string) => {
     setInventory(prev => prev.map(i => {
       if (i.id !== itemId) return i;
@@ -714,11 +717,14 @@ export default function App() {
       const holders = qty >= holder.quantity
         ? i.holders.filter(h => h.collectorId !== collectorId)
         : i.holders.map(h => (h.collectorId === collectorId ? { ...h, quantity: h.quantity - qty } : h));
+      const issues = ok ? i.issues : [
+        ...i.issues,
+        { id: `iss-${Date.now()}`, condition: 'Flagged' as const, quantity: qty, note: note.trim(), reportedAt: nowIso() },
+      ];
       return {
         ...i,
         holders,
-        condition: ok ? i.condition : 'Flagged',
-        conditionNote: ok ? i.conditionNote : note.trim(),
+        issues,
         returnLog: [record, ...i.returnLog].slice(0, 50),
         updatedAt: nowIso(),
       };
@@ -727,14 +733,54 @@ export default function App() {
     showToast(ok ? `Checked in ${quantity} × "${nm}".` : `Checked in ${quantity} × "${nm}" — flagged.`);
   };
 
-  // Set an item's condition directly — to resolve a pending Flagged item into
-  // Damaged/Lost/OK after review, or to report Damaged/Lost/Flagged right away.
-  const setItemCondition = (itemId: string, condition: InventoryItem['condition'], note: string) => {
-    setInventory(prev => prev.map(i => (
-      i.id === itemId ? { ...i, condition, conditionNote: condition === 'OK' ? '' : note.trim(), updatedAt: nowIso() } : i
-    )));
-    const labels: Record<InventoryItem['condition'], string> = { OK: 'Cleared', Flagged: 'Flagged', Damaged: 'Marked damaged', Lost: 'Marked lost' };
-    showToast(`${labels[condition]}.`);
+  // Pull some units out of circulation into a Flagged/Damaged/Lost bucket —
+  // either from free stock, or straight out of what a specific collector
+  // holds (their unit is lost/damaged while still checked out to them).
+  const reportItemIssue = (
+    itemId: string,
+    condition: InventoryIssue['condition'],
+    quantity: number,
+    note: string,
+    sourceCollectorId: string | null
+  ) => {
+    if (quantity <= 0) return;
+    setInventory(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      let holders = i.holders;
+      if (sourceCollectorId) {
+        const holder = i.holders.find(h => h.collectorId === sourceCollectorId);
+        if (!holder || quantity > holder.quantity) return i;
+        holders = quantity >= holder.quantity
+          ? i.holders.filter(h => h.collectorId !== sourceCollectorId)
+          : i.holders.map(h => (h.collectorId === sourceCollectorId ? { ...h, quantity: h.quantity - quantity } : h));
+      } else if (quantity > availableQuantity(i)) {
+        return i;
+      }
+      const issue: InventoryIssue = { id: `iss-${Date.now()}`, condition, quantity, note: note.trim(), reportedAt: nowIso() };
+      return { ...i, holders, issues: [...i.issues, issue], updatedAt: nowIso() };
+    }));
+    const nm = inventory.find(i => i.id === itemId)?.name || 'item';
+    showToast(`Reported ${quantity} × "${nm}" ${condition.toLowerCase()}.`);
+  };
+
+  // Resolve a reported issue: return its units to stock, or reclassify a
+  // pending Flagged issue into a confirmed Damaged/Lost outcome.
+  const resolveItemIssue = (
+    itemId: string,
+    issueId: string,
+    action: { type: 'clear' } | { type: 'reclassify'; condition: 'Damaged' | 'Lost'; note: string }
+  ) => {
+    setInventory(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      const issue = i.issues.find(x => x.id === issueId);
+      if (!issue) return i;
+      const issues = i.issues.filter(x => x.id !== issueId);
+      if (action.type === 'reclassify') {
+        issues.push({ ...issue, condition: action.condition, note: action.note.trim() || issue.note, reportedAt: nowIso() });
+      }
+      return { ...i, issues, updatedAt: nowIso() };
+    }));
+    showToast(action.type === 'clear' ? 'Cleared — back in stock.' : `Marked ${action.condition.toLowerCase()}.`);
   };
 
   // ---- request handlers ----
@@ -920,7 +966,8 @@ export default function App() {
             onSave={saveInventoryItem}
             onAddBatch={addInventoryBatch}
             onDelete={deleteInventoryItem}
-            onSetCondition={setItemCondition}
+            onReportIssue={reportItemIssue}
+            onResolveIssue={resolveItemIssue}
             onAssign={assignInventoryQuantity}
             onReturn={returnInventoryItem}
           />
