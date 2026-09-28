@@ -24,7 +24,7 @@ import {
   CAN_FIND_SITES,
   CAN_COLLECT,
 } from './types';
-import { heldQuantity, availableQuantity } from './utils/inventory';
+import { heldQuantity, availableQuantity, sanitizeInventoryItem } from './utils/inventory';
 import {
   BridgeConfig,
   AppData,
@@ -89,7 +89,9 @@ function threeWayMerge<T extends { id: string }>(remote: T[], local: T[], base: 
 export default function App() {
   // ---- data ----
   const [sites, setSites] = useState<Site[]>(() => loadStoredData('sites', INITIAL_SITES));
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => loadStoredData('inventory', INITIAL_INVENTORY));
+  const [inventory, setInventory] = useState<InventoryItem[]>(
+    () => loadStoredData<any[]>('inventory', INITIAL_INVENTORY).map(sanitizeInventoryItem)
+  );
   const [assignments, setAssignments] = useState<Assignment[]>(() => loadStoredData('assignments', INITIAL_ASSIGNMENTS));
   const [requests, setRequests] = useState<SiteRequest[]>(() => loadStoredData('requests', INITIAL_REQUESTS));
   const [users, setUsers] = useState<UserAccount[]>(() => loadStoredData('users', INITIAL_USERS));
