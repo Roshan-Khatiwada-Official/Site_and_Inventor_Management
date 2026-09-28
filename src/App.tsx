@@ -540,19 +540,24 @@ export default function App() {
     });
   };
 
-  // Set exactly which whole items a data collector holds (Logins → Equipment).
-  // Items they hold now but that are not in `itemIds` go back to stock; newly
-  // listed available items go to them, whole-item (their full quantity). For
-  // splitting one item's stock across several people, use Inventory → Assign.
-  const setCollectorKit = (collectorId: string, itemIds: string[]) => {
+  // Set exactly which items (and how many of each) a data collector holds
+  // (Logins → Equipment). Items they hold now but not in `picks` go back to
+  // stock; picked items are set to the requested quantity, capped by what's
+  // actually available.
+  const setCollectorKit = (collectorId: string, picks: { itemId: string; quantity: number }[]) => {
     const collector = users.find(u => u.id === collectorId);
     setInventory(prev => prev.map(i => {
-      const currentQty = i.holders.find(h => h.collectorId === collectorId)?.quantity || 0;
-      const shouldHold = itemIds.includes(i.id);
-      if (shouldHold && !currentQty && heldQuantity(i) === 0) {
-        return { ...i, holders: [...i.holders, { collectorId, collectorName: collector?.name || '', quantity: i.quantity }], updatedAt: nowIso() };
+      const pick = picks.find(p => p.itemId === i.id);
+      const existing = i.holders.find(h => h.collectorId === collectorId);
+      if (pick) {
+        const cap = availableQuantity(i) + (existing?.quantity || 0);
+        const qty = Math.max(1, Math.min(pick.quantity, cap));
+        const holders = existing
+          ? i.holders.map(h => (h.collectorId === collectorId ? { ...h, quantity: qty } : h))
+          : [...i.holders, { collectorId, collectorName: collector?.name || '', quantity: qty }];
+        return { ...i, holders, updatedAt: nowIso() };
       }
-      if (!shouldHold && currentQty) {
+      if (existing) {
         return { ...i, holders: i.holders.filter(h => h.collectorId !== collectorId), updatedAt: nowIso() };
       }
       return i;

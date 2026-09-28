@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, X, ShieldCheck, Package, PlusCircle, MinusCircle } from 'lucide-react';
 import { UserAccount, UserRole, InventoryItem, CAN_COLLECT } from '../types';
 import { todayStr, byNewest } from '../utils/storage';
+import { availableQuantity } from '../utils/inventory';
+
+export interface KitPick {
+  itemId: string;
+  quantity: number;
+}
 
 interface UsersViewProps {
   users: UserAccount[];
@@ -9,7 +15,7 @@ interface UsersViewProps {
   inventory: InventoryItem[];
   onSave: (u: UserAccount) => void;
   onDelete: (id: string) => void;
-  onSetKit: (collectorId: string, itemIds: string[]) => void;
+  onSetKit: (collectorId: string, picks: KitPick[]) => void;
 }
 
 const ROLES: UserRole[] = ['Admin', 'Site Finder', 'Data Collector', 'Field Worker'];
@@ -102,25 +108,37 @@ const KitModal: React.FC<{
   collector: UserAccount;
   inventory: InventoryItem[];
   onClose: () => void;
-  onSave: (itemIds: string[]) => void;
+  onSave: (picks: KitPick[]) => void;
 }> = ({ collector, inventory, onClose, onSave }) => {
-  const [picked, setPicked] = useState<string[]>(
-    inventory.filter(i => i.holders.some(h => h.collectorId === collector.id)).map(i => i.id)
+  const [picked, setPicked] = useState<KitPick[]>(
+    inventory
+      .filter(i => i.holders.some(h => h.collectorId === collector.id))
+      .map(i => ({ itemId: i.id, quantity: i.holders.find(h => h.collectorId === collector.id)!.quantity }))
   );
   const [q, setQ] = useState('');
 
-  const add = (id: string) => setPicked(p => (p.includes(id) ? p : [...p, id]));
-  const remove = (id: string) => setPicked(p => p.filter(x => x !== id));
+  const add = (id: string) => setPicked(p => (p.some(x => x.itemId === id) ? p : [...p, { itemId: id, quantity: 1 }]));
+  const remove = (id: string) => setPicked(p => p.filter(x => x.itemId !== id));
+  const setQty = (id: string, quantity: number) => setPicked(p => p.map(x => (x.itemId === id ? { ...x, quantity } : x)));
 
-  // Choosable now: fully in stock, or already wholly this collector's, not already picked.
-  // Items split across multiple people are managed from Inventory → Assign instead.
+  // Choosable now: has stock available (or this collector already holds some of it), not already picked.
   const available = inventory
-    .filter(i => (i.holders.length === 0 || (i.holders.length === 1 && i.holders[0].collectorId === collector.id)) && !picked.includes(i.id))
+    .filter(i => !picked.some(p => p.itemId === i.id))
+    .filter(i => availableQuantity(i) > 0 || i.holders.some(h => h.collectorId === collector.id))
     .filter(i => {
       const t = q.toLowerCase();
       return !t || i.name.toLowerCase().includes(t) || i.itemId.toLowerCase().includes(t);
     });
-  const pickedItems = picked.map(id => inventory.find(i => i.id === id)).filter(Boolean) as InventoryItem[];
+  const pickedItems = picked
+    .map(p => {
+      const item = inventory.find(i => i.id === p.itemId);
+      return item ? { item, quantity: p.quantity } : null;
+    })
+    .filter((x): x is { item: InventoryItem; quantity: number } => !!x);
+
+  // How many more of this item this collector could take right now (what's
+  // free in stock, plus whatever they already hold of it).
+  const maxFor = (item: InventoryItem) => availableQuantity(item) + (item.holders.find(h => h.collectorId === collector.id)?.quantity || 0);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
@@ -142,20 +160,30 @@ const KitModal: React.FC<{
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-semibold">Assigning to {collector.name} ({pickedItems.length})</label>
             </div>
-            <div className="border border-slate-200 rounded-lg min-h-[44px] max-h-40 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
+            <div className="border border-slate-200 rounded-lg min-h-[44px] max-h-48 overflow-y-auto divide-y divide-slate-100 bg-slate-50">
               {pickedItems.length === 0 && <p className="px-3 py-3 text-slate-400">Nothing added yet — pick items below.</p>}
-              {pickedItems.map(i => (
-                <div key={i.id} className="flex items-center justify-between px-3 py-2 bg-white">
-                  <span>
-                    <span className="font-mono text-slate-500">{i.itemId}</span>{' '}
-                    <span className="text-slate-800">{i.name}</span>
-                    {i.condition === 'Flagged' && <span className="ml-1 text-[10px] text-rose-600">flagged</span>}
-                  </span>
-                  <button type="button" onClick={() => remove(i.id)} className="text-slate-400 hover:text-rose-600">
-                    <MinusCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+              {pickedItems.map(({ item, quantity }) => {
+                const max = maxFor(item);
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-white">
+                    <span className="min-w-0">
+                      <span className="font-mono text-slate-500">{item.itemId}</span>{' '}
+                      <span className="text-slate-800">{item.name}</span>
+                      {item.condition === 'Flagged' && <span className="ml-1 text-[10px] text-rose-600">flagged</span>}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {item.quantity > 1 && (
+                        <input type="number" min={1} max={max} value={quantity}
+                          onChange={e => setQty(item.id, Math.max(1, Math.min(max, parseInt(e.target.value) || 1)))}
+                          className="w-14 px-1.5 py-1 border border-slate-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                      )}
+                      <button type="button" onClick={() => remove(item.id)} className="text-slate-400 hover:text-rose-600">
+                        <MinusCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -171,6 +199,7 @@ const KitModal: React.FC<{
                   <span>
                     <span className="font-mono text-slate-500">{i.itemId}</span>{' '}
                     <span className="text-slate-800">{i.name}</span>
+                    {i.quantity > 1 && <span className="ml-1 text-[10px] text-slate-400">({availableQuantity(i)} available)</span>}
                   </span>
                   <button type="button" onClick={() => add(i.id)}
                     className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium">
@@ -181,7 +210,7 @@ const KitModal: React.FC<{
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-400">Removing an item here just returns it to stock — no condition check. Use the Returns tab when equipment physically comes back.</p>
+          <p className="text-[11px] text-slate-400">For items with more than one in stock, set how many to give — the rest stays available for others. Removing an item here just returns it to stock — no condition check. Use the Returns tab when equipment physically comes back.</p>
         </div>
 
         <div className="shrink-0 sticky bottom-0 px-6 pt-3 pb-4 bg-white border-t border-slate-200 flex justify-end gap-2">
@@ -200,7 +229,7 @@ const UserModal: React.FC<{
   inventory: InventoryItem[];
   onClose: () => void;
   onSave: (u: UserAccount) => void;
-  onSetKit: (collectorId: string, itemIds: string[]) => void;
+  onSetKit: (collectorId: string, picks: KitPick[]) => void;
 }> = ({ user, inventory, onClose, onSave, onSetKit }) => {
   const [name, setName] = useState('');
   const [loginId, setLoginId] = useState('');
@@ -340,7 +369,7 @@ const UserModal: React.FC<{
           collector={user}
           inventory={inventory}
           onClose={() => setKitOpen(false)}
-          onSave={(ids) => { onSetKit(user.id, ids); setKitOpen(false); }}
+          onSave={(picks) => { onSetKit(user.id, picks); setKitOpen(false); }}
         />
       )}
     </div>
