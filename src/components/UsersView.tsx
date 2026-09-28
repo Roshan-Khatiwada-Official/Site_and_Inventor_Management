@@ -75,10 +75,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, invent
                     }`}>{u.status}</span>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button onClick={() => { setEditing(u); setOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
+                    <button onClick={() => { setEditing(u); setOpen(true); }} title="Edit" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => onDelete(u.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
+                    <button onClick={() => onDelete(u.id)} title="Delete" className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
@@ -151,7 +151,7 @@ const KitModal: React.FC<{
               <p className="text-[11px] text-slate-500">to <strong className="text-slate-700">{collector.name}</strong></p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} title="Close" className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
@@ -177,7 +177,7 @@ const KitModal: React.FC<{
                           onChange={e => setQty(item.id, Math.max(1, Math.min(max, parseInt(e.target.value) || 1)))}
                           className="w-14 px-1.5 py-1 border border-slate-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                       )}
-                      <button type="button" onClick={() => remove(item.id)} className="text-slate-400 hover:text-rose-600">
+                      <button type="button" onClick={() => remove(item.id)} title="Remove" className="text-slate-400 hover:text-rose-600">
                         <MinusCircle className="w-4 h-4" />
                       </button>
                     </div>
@@ -286,7 +286,7 @@ const UserModal: React.FC<{
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><ShieldCheck className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">{user ? 'Edit Login' : 'Add Login'}</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} title="Close" className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Login</p>

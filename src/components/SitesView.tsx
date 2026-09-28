@@ -132,10 +132,10 @@ export const SitesView: React.FC<SitesViewProps> = ({ mode, sites, assignments, 
                         <XCircle className="w-3.5 h-3.5" /> Cancel approval
                       </button>
                     )}
-                    <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
+                    <button onClick={() => openEdit(s)} title="Edit" className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => onDelete(s.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
+                    <button onClick={() => onDelete(s.id)} title="Delete" className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>

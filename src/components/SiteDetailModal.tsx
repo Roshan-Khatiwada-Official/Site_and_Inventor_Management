@@ -65,7 +65,7 @@ export const SiteDetailModal: React.FC<SiteDetailModalProps> = ({ isOpen, site, 
               <p className="text-[11px] text-slate-400 font-mono">{site.code} {site.category && `· ${site.category}`}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200">
+          <button onClick={onClose} title="Close" className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200">
             <X className="w-5 h-5" />
           </button>
         </div>

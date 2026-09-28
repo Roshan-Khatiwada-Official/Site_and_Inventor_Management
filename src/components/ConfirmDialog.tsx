@@ -30,7 +30,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ state, onCancel })
               <h3 className="font-bold text-slate-900 text-sm">{state.title || 'Are you sure?'}</h3>
               <p className="mt-1 text-slate-600">{state.message}</p>
             </div>
-            <button onClick={onCancel} className="ml-auto p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 shrink-0"><X className="w-4 h-4" /></button>
+            <button onClick={onCancel} title="Close" className="ml-auto p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 shrink-0"><X className="w-4 h-4" /></button>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onCancel} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancel</button>

@@ -321,7 +321,7 @@ const AssignmentCard: React.FC<{
                         placeholder="e.g. 2" className="w-24 px-2 py-1.5 border border-slate-300 rounded-lg bg-white" />
                     </div>
                     {rows.length > 1 && (
-                      <button type="button" onClick={() => removeRow(camId, idx)}
+                      <button type="button" onClick={() => removeRow(camId, idx)} title="Remove this row"
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg mb-0.5">
                         <X className="w-3.5 h-3.5" />
                       </button>

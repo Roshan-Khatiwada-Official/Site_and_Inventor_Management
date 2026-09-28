@@ -86,7 +86,7 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                     </td>
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       <button onClick={() => { setEditing(a); setOpen(true); }} className="text-blue-600 hover:underline mr-3">Edit</button>
-                      <button onClick={() => onDelete(a.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
+                      <button onClick={() => onDelete(a.id)} title="Delete" className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -165,7 +165,7 @@ const AssignmentModal: React.FC<{
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><ClipboardList className="w-4 h-4" /></div>
             <h3 className="font-bold text-slate-900 text-base">{assignment ? 'Edit Assignment' : 'New Assignment'}</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} title="Close" className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200"><X className="w-5 h-5" /></button>
         </div>
 
         <form onSubmit={submit} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
