@@ -39,3 +39,19 @@ push a new version when `Code.gs` itself changes:
 - The `Users` tab contains login IDs and passwords in plain text. Restrict who can
   open the sheet.
 - Edit data through the app. The readable tabs are rebuilt from `db` on every save.
+
+## Backups
+
+Every write snapshots the *previous* data (everything, all collections) to a
+timestamped file in a Drive folder named **SiteOps Backups**, before applying
+the new write. Kept for 30 days, then auto-pruned. This means one bad write —
+a buggy client, a mistaken bulk edit — can always be undone by restoring the
+snapshot from right before it, instead of reconstructing it by hand.
+
+- **List backups**: `GET/POST` with `action=listBackups` and the token — returns
+  `{ ok, backups: [{ name, createdAt, size }, …] }`, newest first.
+- **Restore a backup**: `action=restoreBackup`, `token`, and `name` (one of the
+  names from `listBackups`) — overwrites the live sheet with that snapshot
+  (itself backed up first, so a restore can be undone too).
+- Backups live in Drive under **My Drive → SiteOps Backups**, viewable/downloadable
+  directly if you'd rather not go through the API.

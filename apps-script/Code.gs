@@ -5,6 +5,12 @@
  * tab per top-level array in the data (sites, inventory, assignments, requests,
  * users, …). Collection-agnostic: no code change needed when collections change.
  *
+ * Every write snapshots whatever was there IMMEDIATELY BEFORE it, to a
+ * timestamped file in a Drive folder — so a single bad write (a buggy client
+ * overwriting everything, a mistaken bulk edit, anything) can always be
+ * undone by restoring the snapshot from just before it, instead of having to
+ * reconstruct what was lost by hand.
+ *
  * SETUP / REDEPLOY:
  *   1. Google Sheet -> Extensions -> Apps Script -> paste this file -> Save.
  *   2. Set SECRET_TOKEN below to your own long random string.
@@ -14,6 +20,8 @@
 
 var SECRET_TOKEN = 'siteops-db-2026-Kx9mPq3nRw7v';
 var RAW_SHEET = 'db';
+var BACKUP_FOLDER_NAME = 'SiteOps Backups';
+var BACKUP_RETENTION_DAYS = 30;
 
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
@@ -40,11 +48,31 @@ function handleRequest(e) {
       var lock = LockService.getScriptLock();
       lock.waitLock(20000);
       try {
+        backupBeforeWrite();
         writeAll(body.data || {});
       } finally {
         lock.releaseLock();
       }
       return output.setContent(JSON.stringify({ ok: true, savedAt: new Date().toISOString() }));
+    }
+
+    if (action === 'listBackups') {
+      return output.setContent(JSON.stringify({ ok: true, backups: listBackups() }));
+    }
+
+    if (action === 'restoreBackup') {
+      var name = body.name || params.name;
+      if (!name) return output.setContent(JSON.stringify({ ok: false, error: 'Missing backup name' }));
+      var lock2 = LockService.getScriptLock();
+      lock2.waitLock(20000);
+      var restored;
+      try {
+        backupBeforeWrite(); // so restoring is itself undoable
+        restored = restoreBackup(name);
+      } finally {
+        lock2.releaseLock();
+      }
+      return output.setContent(JSON.stringify({ ok: true, data: restored, restoredAt: new Date().toISOString() }));
     }
 
     return output.setContent(JSON.stringify({
@@ -159,4 +187,61 @@ function renderReadableTab(wb, name, rows) {
 
   sheet.getRange(1, 1, matrix.length, columns.length).setValues(matrix);
   sheet.setFrozenRows(1);
+}
+
+// ---------------------------------------------------------------------------
+// Backups — every write snapshots the data as it stood immediately before
+// that write, to its own timestamped file in a Drive folder. A backup
+// failure never blocks the actual write (better to save without a backup
+// than to lose the save entirely over a Drive hiccup).
+// ---------------------------------------------------------------------------
+
+function backupFolder_() {
+  var it = DriveApp.getFoldersByName(BACKUP_FOLDER_NAME);
+  if (it.hasNext()) return it.next();
+  return DriveApp.createFolder(BACKUP_FOLDER_NAME);
+}
+
+function backupBeforeWrite() {
+  try {
+    var current = readAll();
+    if (!current || !Object.keys(current).length) return; // nothing to protect yet
+    var folder = backupFolder_();
+    var stamp = Utilities.formatDate(new Date(), 'UTC', "yyyyMMdd'T'HHmmss'Z'");
+    folder.createFile('siteops-backup-' + stamp + '.json', JSON.stringify(current), MimeType.PLAIN_TEXT);
+    pruneOldBackups_(folder);
+  } catch (err) {
+    // swallow — see comment above
+  }
+}
+
+function pruneOldBackups_(folder) {
+  var cutoff = new Date(Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var f = files.next();
+    if (f.getDateCreated() < cutoff) f.setTrashed(true);
+  }
+}
+
+function listBackups() {
+  var folder = backupFolder_();
+  var files = folder.getFiles();
+  var out = [];
+  while (files.hasNext()) {
+    var f = files.next();
+    out.push({ name: f.getName(), createdAt: f.getDateCreated().toISOString(), size: f.getSize() });
+  }
+  out.sort(function (a, b) { return b.createdAt.localeCompare(a.createdAt); });
+  return out;
+}
+
+function restoreBackup(name) {
+  var folder = backupFolder_();
+  var files = folder.getFilesByName(name);
+  if (!files.hasNext()) throw new Error('Backup not found: ' + name);
+  var content = files.next().getBlob().getDataAsString();
+  var data = JSON.parse(content);
+  writeAll(data);
+  return data;
 }
