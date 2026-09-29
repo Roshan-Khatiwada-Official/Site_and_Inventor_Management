@@ -75,7 +75,18 @@ const nowIso = () => new Date().toISOString();
  * that raced a slow/failed push silently discard the edit and restore the
  * old value (the "small refresh and my change is gone" bug).
  */
-function threeWayMerge<T extends { id: string }>(remote: T[], local: T[], base: T[]): T[] {
+// `base` is null until this session has a confirmed, successfully-synced
+// snapshot to diff against (the initial pull can fail — flaky network,
+// device just woken up — leaving it null indefinitely on that device, while
+// the poll/push loop keeps running against whatever stale copy was cached in
+// localStorage). Without a real base, every local row looks "added" (there's
+// nothing in baseMap to compare it to), so the old code below treated the
+// device's entire stale local copy as newly-made edits and overwrote every
+// unrelated row on the shared sheet with it — silently wiping out anything
+// added or changed by anyone else since that device's cache was last good.
+// With no reliable base, remote must be trusted outright instead.
+function threeWayMerge<T extends { id: string }>(remote: T[], local: T[], base: T[] | null): T[] {
+  if (base === null) return remote;
   const baseMap = new Map(base.map(x => [x.id, x]));
   const localMap = new Map(local.map(x => [x.id, x]));
   const result = new Map<string, T>(remote.map(x => [x.id, x]));
@@ -260,11 +271,11 @@ export default function App() {
         };
         const merged: AppData = remote
           ? {
-              sites: threeWayMerge(remote.sites, localNow.sites, base?.sites || []),
-              inventory: threeWayMerge(remote.inventory, localNow.inventory, base?.inventory || []),
-              assignments: threeWayMerge(remote.assignments, localNow.assignments, base?.assignments || []),
-              requests: threeWayMerge(remote.requests, localNow.requests, base?.requests || []),
-              users: threeWayMerge(remote.users, localNow.users, base?.users || []),
+              sites: threeWayMerge(remote.sites, localNow.sites, base ? base.sites : null),
+              inventory: threeWayMerge(remote.inventory, localNow.inventory, base ? base.inventory : null),
+              assignments: threeWayMerge(remote.assignments, localNow.assignments, base ? base.assignments : null),
+              requests: threeWayMerge(remote.requests, localNow.requests, base ? base.requests : null),
+              users: threeWayMerge(remote.users, localNow.users, base ? base.users : null),
             }
           : localNow;
 
@@ -319,11 +330,11 @@ export default function App() {
         // only truly-new, not-yet-synced local rows are preserved.
         const base = lastSyncedRef.current;
         const merged: AppData = {
-          sites: threeWayMerge(d.sites, sitesRef.current, base?.sites || []),
-          inventory: threeWayMerge(d.inventory, inventoryRef.current, base?.inventory || []),
-          assignments: threeWayMerge(d.assignments, assignmentsRef.current, base?.assignments || []),
-          requests: threeWayMerge(d.requests, requestsRef.current, base?.requests || []),
-          users: d.users.length ? threeWayMerge(d.users, usersRef.current, base?.users || []) : usersRef.current,
+          sites: threeWayMerge(d.sites, sitesRef.current, base ? base.sites : null),
+          inventory: threeWayMerge(d.inventory, inventoryRef.current, base ? base.inventory : null),
+          assignments: threeWayMerge(d.assignments, assignmentsRef.current, base ? base.assignments : null),
+          requests: threeWayMerge(d.requests, requestsRef.current, base ? base.requests : null),
+          users: d.users.length ? threeWayMerge(d.users, usersRef.current, base ? base.users : null) : usersRef.current,
         };
         setBlockingLoad('Updating…');
         hydratingRef.current = true;
