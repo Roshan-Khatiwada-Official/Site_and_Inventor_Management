@@ -10,6 +10,7 @@ import {
   SITE_STATUS_FROM_DB,
   SITE_STATUS_TO_DB,
 } from './enums.js';
+import { hashPassword } from './auth.js';
 import type {
   AppData,
   Assignment,
@@ -34,10 +35,16 @@ export async function readAppData(): Promise<AppData> {
   ]);
 
   const result: AppData = {
+    // Password is never sent to the client — even hashed, there's no reason
+    // a browser needs it. Login goes through POST /api/auth/login instead,
+    // which checks it server-side and never returns it either. Blank here,
+    // not omitted, since the frontend type still has the field (it's reused
+    // client-side as the "set a new password" input when creating/editing a
+    // login — see upsertUser below for how that round-trips safely).
     users: users.map((u): UserAccount => ({
       id: u.id,
       loginId: u.loginId,
-      password: u.password,
+      password: '',
       name: u.name,
       role: ROLE_FROM_DB[u.role],
       status: u.status,
@@ -190,9 +197,21 @@ export async function writeAppData(data: AppData): Promise<void> {
 }
 
 async function upsertUser(tx: Tx, u: UserAccount) {
+  // readAppData() always sends password back as '' (see comment there), so
+  // every full-sync round-trip carries a blank password for every existing
+  // user it didn't touch. A blank incoming password therefore means "leave
+  // it alone" — only a non-empty value (the admin actually typed a new one
+  // in the Add/Edit Login form) gets hashed and stored.
+  let password: string | undefined;
+  if (u.password) {
+    password = await hashPassword(u.password);
+  } else {
+    const existing = await tx.user.findUnique({ where: { id: u.id }, select: { password: true } });
+    password = existing?.password; // undefined for a genuinely new user with no password set — caught by the DB NOT NULL constraint
+  }
+
   const common = {
     loginId: u.loginId,
-    password: u.password,
     name: u.name,
     role: ROLE_TO_DB[u.role],
     status: u.status,
@@ -204,7 +223,11 @@ async function upsertUser(tx: Tx, u: UserAccount) {
     updatedAt: u.updatedAt,
     lastLogin: u.lastLogin ?? null,
   };
-  await tx.user.upsert({ where: { id: u.id }, create: { id: u.id, ...common }, update: common });
+  await tx.user.upsert({
+    where: { id: u.id },
+    create: { id: u.id, password: password ?? '', ...common },
+    update: password !== undefined ? { password, ...common } : common,
+  });
 }
 
 async function upsertSite(tx: Tx, s: Site) {

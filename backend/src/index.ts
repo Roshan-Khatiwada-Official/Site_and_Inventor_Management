@@ -3,6 +3,8 @@ import cors from 'cors';
 import express from 'express';
 import { readAppData, writeAppData } from './lib/sync.js';
 import { prisma } from './lib/prisma.js';
+import { verifyPassword } from './lib/auth.js';
+import { ROLE_FROM_DB } from './lib/enums.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
@@ -30,6 +32,47 @@ app.get('/health', async (_req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(503).json({ ok: false, error: String(err) });
+  }
+});
+
+// Checks credentials server-side and never returns a password (hashed or
+// not) to the client, unlike the old model of shipping the whole users
+// table — including every password — to the browser just so it could check
+// the login form locally.
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const loginId = String(req.body?.loginId || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!loginId || !password) {
+      return res.status(400).json({ ok: false, error: 'Login ID and password are required.' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { loginId: { equals: loginId, mode: 'insensitive' } },
+    });
+    if (!user) {
+      return res.status(401).json({ ok: false, error: `No account found with Login ID "${req.body?.loginId}". Please contact the system administrator to obtain access.` });
+    }
+    if (user.status === 'Suspended') {
+      return res.status(403).json({ ok: false, error: `Account "${req.body?.loginId}" is currently suspended. Please contact your system administrator.` });
+    }
+    const valid = await verifyPassword(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ ok: false, error: 'Incorrect password. Please verify your credentials or contact the administrator.' });
+    }
+
+    res.json({
+      ok: true,
+      user: {
+        id: user.id, loginId: user.loginId, password: '', name: user.name,
+        role: ROLE_FROM_DB[user.role], status: user.status, phone: user.phone,
+        email: user.email, address: user.address, notes: user.notes,
+        createdAt: user.createdAt, updatedAt: user.updatedAt, lastLogin: user.lastLogin ?? undefined,
+      },
+    });
+  } catch (err) {
+    console.error('POST /api/auth/login failed:', err);
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 

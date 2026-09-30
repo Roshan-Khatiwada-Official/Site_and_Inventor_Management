@@ -163,3 +163,19 @@ export async function bridgePush(config: BridgeConfig, data: AppData): Promise<s
 export async function bridgeTestConnection(config: BridgeConfig): Promise<AppData> {
   return bridgePull(config);
 }
+
+/**
+ * Legacy path only — the Sheets bridge has no server to verify a password
+ * against, so this checks the already-fetched `users` array locally, same
+ * as the app always did before the Postgres backend existed. Kept only so
+ * this bridge still works during the transition; see apiBridge.ts's login()
+ * for the real, server-checked version.
+ */
+export async function login(_config: BridgeConfig, users: UserAccount[], loginId: string, password: string): Promise<{ ok: true; user: UserAccount } | { ok: false; error: string }> {
+  const trimmed = loginId.trim().toLowerCase();
+  const account = users.find(u => u.loginId.toLowerCase() === trimmed);
+  if (!account) return { ok: false, error: `No account found with Login ID "${loginId}". Please contact the system administrator to obtain access.` };
+  if (account.status === 'Suspended') return { ok: false, error: `Account "${loginId}" is currently suspended. Please contact your system administrator.` };
+  if (account.password !== password) return { ok: false, error: 'Incorrect password. Please verify your credentials or contact the administrator.' };
+  return { ok: true, user: account };
+}

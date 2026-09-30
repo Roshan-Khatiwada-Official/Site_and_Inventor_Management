@@ -12,14 +12,25 @@
 // sheetsBridge.ts and this file, and import apiBridge.ts directly).
 import * as sheetsBridge from './sheetsBridge';
 import * as apiBridge from './apiBridge';
+import type { BridgeConfig, AppData } from './apiBridge'; // identical shape on both sides
+import type { UserAccount } from '../types';
+
+export type { BridgeConfig, AppData } from './apiBridge';
 
 const USE_NEW_BACKEND = !!(import.meta.env.VITE_API_URL as string | undefined);
-const impl = USE_NEW_BACKEND ? apiBridge : sheetsBridge;
-
-export type { BridgeConfig, AppData } from './apiBridge'; // identical shape on both sides
+const impl: {
+  getStoredBridgeConfig: () => BridgeConfig | null;
+  bridgePull: (config: BridgeConfig) => Promise<AppData>;
+  bridgePush: (config: BridgeConfig, data: AppData) => Promise<string>;
+  bridgeTestConnection: (config: BridgeConfig) => Promise<AppData>;
+  DEFAULT_BRIDGE_CONFIG: BridgeConfig;
+  login: (config: BridgeConfig, users: UserAccount[], loginId: string, password: string) =>
+    Promise<{ ok: true; user: UserAccount } | { ok: false; error: string }>;
+} = USE_NEW_BACKEND ? apiBridge : sheetsBridge;
 
 export const getStoredBridgeConfig = impl.getStoredBridgeConfig;
 export const bridgePull = impl.bridgePull;
 export const bridgePush = impl.bridgePush;
 export const bridgeTestConnection = impl.bridgeTestConnection;
 export const DEFAULT_BRIDGE_CONFIG = impl.DEFAULT_BRIDGE_CONFIG;
+export const login = impl.login;

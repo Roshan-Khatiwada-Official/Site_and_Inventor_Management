@@ -167,3 +167,23 @@ export async function bridgePush(config: BridgeConfig, data: AppData): Promise<s
 export async function bridgeTestConnection(config: BridgeConfig): Promise<AppData> {
   return bridgePull(config);
 }
+
+/**
+ * Checks a login attempt against the backend — the password never leaves
+ * this call to anywhere else in the app, unlike the old model of pulling
+ * every user (with their password) just to compare it client-side.
+ */
+export async function login(config: BridgeConfig, _users: UserAccount[], loginId: string, password: string): Promise<{ ok: true; user: UserAccount } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${config.webAppUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: headers(config),
+      body: JSON.stringify({ loginId, password }),
+    });
+    const json = await res.json().catch(() => ({ ok: false, error: 'API returned an invalid response.' }));
+    if (!json.ok) return { ok: false, error: json.error || 'Login failed.' };
+    return { ok: true, user: json.user as UserAccount };
+  } catch {
+    return { ok: false, error: 'Could not reach the server. Check your connection and try again.' };
+  }
+}

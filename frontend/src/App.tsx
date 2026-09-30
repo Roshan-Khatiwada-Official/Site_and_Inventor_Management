@@ -33,6 +33,8 @@ import {
   getStoredBridgeConfig,
   bridgePull,
   bridgePush,
+  login as bridgeLogin,
+  DEFAULT_BRIDGE_CONFIG,
 } from './services/bridge';
 import { LoginScreen } from './components/LoginScreen';
 import { Header } from './components/Header';
@@ -965,7 +967,10 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center">
-        <LoginScreen users={users} onLoginSuccess={handleLogin} />
+        <LoginScreen
+          onVerifyLogin={(loginId, password) => bridgeLogin(bridgeConfig || DEFAULT_BRIDGE_CONFIG, users, loginId, password)}
+          onLoginSuccess={handleLogin}
+        />
         {toastEl}
       </div>
     );

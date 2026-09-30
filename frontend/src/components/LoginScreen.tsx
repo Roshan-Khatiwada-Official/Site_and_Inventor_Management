@@ -13,13 +13,15 @@ import {
 } from 'lucide-react';
 import { UserAccount } from '../types';
 
+type LoginResult = { ok: true; user: UserAccount } | { ok: false; error: string };
+
 interface LoginScreenProps {
-  users: UserAccount[];
+  onVerifyLogin: (loginId: string, password: string) => Promise<LoginResult>;
   onLoginSuccess: (user: UserAccount) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
-  users,
+  onVerifyLogin,
   onLoginSuccess,
 }) => {
   const [loginId, setLoginId] = useState('');
@@ -28,35 +30,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    const trimmedId = loginId.trim().toLowerCase();
-    const account = users.find(u => u.loginId.toLowerCase() === trimmedId);
-
-    if (!account) {
-      setErrorMessage(`No account found with Login ID "${loginId}". Please contact the system administrator to obtain access.`);
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (account.status === 'Suspended') {
-      setErrorMessage(`Account "${loginId}" is currently suspended. Please contact your system administrator.`);
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (account.password !== password) {
-      setErrorMessage('Incorrect password. Please verify your credentials or contact the administrator.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Success
+    const result = await onVerifyLogin(loginId, password);
     setIsSubmitting(false);
-    onLoginSuccess(account);
+    // 'error' in result (not result.ok) narrows this union reliably even
+    // without strictNullChecks — see git history for the TS quirk if this
+    // looks unusual: boolean-literal discriminants (`ok: true`/`ok: false`)
+    // don't always narrow without it, but property-presence checks do.
+    if ('error' in result) { setErrorMessage(result.error); return; }
+    onLoginSuccess(result.user);
   };
 
   return (

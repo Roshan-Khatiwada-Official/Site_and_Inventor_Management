@@ -45,7 +45,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, invent
                 <th className="px-4 py-2.5 font-semibold">Name</th>
                 <th className="px-4 py-2.5 font-semibold">Contact</th>
                 <th className="px-4 py-2.5 font-semibold">Login ID</th>
-                <th className="px-4 py-2.5 font-semibold">Password</th>
                 <th className="px-4 py-2.5 font-semibold">Role</th>
                 <th className="px-4 py-2.5 font-semibold">Equipment</th>
                 <th className="px-4 py-2.5 font-semibold">Status</th>
@@ -64,7 +63,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, invent
                     {u.email && <div className="text-[11px] text-slate-400">{u.email}</div>}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-slate-600">{u.loginId}</td>
-                  <td className="px-4 py-2.5 font-mono text-slate-400">{u.password}</td>
                   <td className="px-4 py-2.5 text-slate-600">{u.role}</td>
                   <td className="px-4 py-2.5 text-slate-600">
                     {CAN_COLLECT.includes(u.role) ? inventory.filter(i => i.holders.some(h => h.collectorId === u.id)).length : '—'}
@@ -257,7 +255,7 @@ const UserModal: React.FC<{
     setError(null);
     if (!name.trim()) { setError('Full Name is required.'); return; }
     if (!loginId.trim()) { setError('Login ID is required.'); return; }
-    if (!password.trim()) { setError('Password is required.'); return; }
+    if (!user && !password.trim()) { setError('Password is required for a new login.'); return; }
     onSave({
       id: user ? user.id : `usr-${Date.now()}`,
       name: name.trim(),
@@ -296,8 +294,9 @@ const UserModal: React.FC<{
               <input required value={loginId} onChange={e => setLoginId(e.target.value)} className={`${field} font-mono`} />
             </div>
             <div>
-              <label className="block font-semibold mb-1">Password *</label>
-              <input required value={password} onChange={e => setPassword(e.target.value)} className={`${field} font-mono`} />
+              <label className="block font-semibold mb-1">{user ? 'New Password' : 'Password *'}</label>
+              <input required={!user} value={password} onChange={e => setPassword(e.target.value)}
+                placeholder={user ? 'Leave blank to keep unchanged' : ''} className={`${field} font-mono`} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
