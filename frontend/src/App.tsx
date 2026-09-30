@@ -33,7 +33,7 @@ import {
   getStoredBridgeConfig,
   bridgePull,
   bridgePush,
-} from './services/sheetsBridge';
+} from './services/apiBridge';
 import { LoginScreen } from './components/LoginScreen';
 import { Header } from './components/Header';
 import { SitesView } from './components/SitesView';
