@@ -1,0 +1,333 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from './prisma.js';
+import {
+  ASSIGNMENT_STATUS_FROM_DB,
+  ASSIGNMENT_STATUS_TO_DB,
+  REQUEST_STATUS_FROM_DB,
+  REQUEST_STATUS_TO_DB,
+  ROLE_FROM_DB,
+  ROLE_TO_DB,
+  SITE_STATUS_FROM_DB,
+  SITE_STATUS_TO_DB,
+} from './enums.js';
+import type {
+  AppData,
+  Assignment,
+  InventoryItem,
+  Site,
+  SiteRequest,
+  UserAccount,
+} from '../types.js';
+
+type Tx = Prisma.TransactionClient;
+
+/** Read the whole database and serialize it into the exact shape the frontend expects. */
+export async function readAppData(): Promise<AppData> {
+  const [users, sites, inventory, assignments, requests] = await Promise.all([
+    prisma.user.findMany(),
+    prisma.site.findMany(),
+    prisma.inventoryItem.findMany({
+      include: { holders: true, issues: true, resolvedIssues: true, returnLog: true },
+    }),
+    prisma.assignment.findMany({ include: { sessions: true } }),
+    prisma.siteRequest.findMany(),
+  ]);
+
+  const result: AppData = {
+    users: users.map((u): UserAccount => ({
+      id: u.id,
+      loginId: u.loginId,
+      password: u.password,
+      name: u.name,
+      role: ROLE_FROM_DB[u.role],
+      status: u.status,
+      phone: u.phone,
+      email: u.email,
+      address: u.address,
+      notes: u.notes,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      lastLogin: u.lastLogin ?? undefined,
+    })),
+    sites: sites.map((s): Site => ({
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      category: s.category,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      supervisor: s.supervisor,
+      supervisorContact: s.supervisorContact,
+      workerCount: s.workerCount,
+      note: s.note,
+      foundById: s.foundById ?? '',
+      foundByName: s.foundByName,
+      reservedById: s.reservedById ?? '',
+      reservedByName: s.reservedByName,
+      status: SITE_STATUS_FROM_DB[s.status],
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+    inventory: inventory.map((i): InventoryItem => ({
+      id: i.id,
+      itemId: i.itemId,
+      name: i.name,
+      category: i.category,
+      quantity: i.quantity,
+      note: i.note,
+      holders: i.holders.map(h => ({ collectorId: h.collectorId, collectorName: '', quantity: h.quantity })),
+      issues: i.issues.map(x => ({
+        id: x.id,
+        condition: x.condition,
+        quantity: x.quantity,
+        note: x.note,
+        reportedAt: x.reportedAt,
+        reportedByCollectorId: x.reportedByCollectorId ?? undefined,
+        reportedByCollectorName: x.reportedByCollectorName ?? undefined,
+      })),
+      resolvedIssues: i.resolvedIssues.map(x => ({
+        id: x.id,
+        condition: x.condition,
+        quantity: x.quantity,
+        note: x.note,
+        reportedAt: x.reportedAt,
+        reportedByCollectorId: x.reportedByCollectorId ?? undefined,
+        reportedByCollectorName: x.reportedByCollectorName ?? undefined,
+        outcome: x.outcome,
+        resolvedAt: x.resolvedAt,
+        resolvedByName: x.resolvedByName,
+      })),
+      returnLog: i.returnLog.map(r => ({
+        date: r.date,
+        ok: r.ok,
+        note: r.note,
+        byName: r.byName,
+        fromCollectorId: r.fromCollectorId,
+        fromCollectorName: r.fromCollectorName,
+        quantity: r.quantity,
+      })),
+      createdAt: i.createdAt,
+      updatedAt: i.updatedAt,
+    })),
+    assignments: assignments.map((a): Assignment => ({
+      id: a.id,
+      siteId: a.siteId,
+      siteName: a.siteName,
+      collectorId: a.collectorId,
+      collectorName: a.collectorName,
+      assignedById: a.assignedById,
+      assignedByName: a.assignedByName,
+      status: ASSIGNMENT_STATUS_FROM_DB[a.status],
+      hoursLogged: a.hoursLogged,
+      sessions: a.sessions.map(s => ({
+        id: s.id,
+        date: s.date,
+        hours: s.hours,
+        actualHours: s.actualHours ?? undefined,
+        verifiedByName: s.verifiedByName ?? undefined,
+        verifiedAt: s.verifiedAt ?? undefined,
+        note: s.note ?? undefined,
+        cameraId: s.cameraId ?? undefined,
+        cameraName: s.cameraName ?? undefined,
+        cameraItemId: s.cameraItemId ?? undefined,
+        task: s.task ?? undefined,
+      })),
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    })),
+    requests: requests.map((r): SiteRequest => ({
+      id: r.id,
+      siteId: r.siteId,
+      siteName: r.siteName,
+      collectorId: r.collectorId,
+      collectorName: r.collectorName,
+      status: REQUEST_STATUS_FROM_DB[r.status],
+      requestedAt: r.requestedAt,
+      decidedAt: r.decidedAt ?? undefined,
+      updatedAt: r.updatedAt,
+    })),
+  };
+
+  return fillHolderNames(result);
+}
+
+// InventoryHolder.collectorName isn't a real column (the schema only keeps
+// collectorId — the name is looked up live from User so it can't drift).
+// Reading it back just needs the id; readAppData fills the name in via a
+// second pass so callers always get the same shape whether they just wrote
+// it or are reading fresh.
+async function fillHolderNames(data: AppData): Promise<AppData> {
+  const users = await prisma.user.findMany({ select: { id: true, name: true } });
+  const nameById = new Map(users.map(u => [u.id, u.name]));
+  data.inventory.forEach(item => {
+    item.holders.forEach(h => { h.collectorName = nameById.get(h.collectorId) || h.collectorName; });
+  });
+  return data;
+}
+
+/**
+ * Replace the whole database with exactly what's in `data` — the same
+ * full-overwrite contract the old Google Sheets bridge had (the frontend's
+ * merge/conflict logic already assumes this), just atomic now instead of
+ * "write 5 chunked cells and hope nothing reads it half-done".
+ */
+export async function writeAppData(data: AppData): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    // 1) Parents first, in dependency order.
+    await Promise.all(data.users.map(u => upsertUser(tx, u)));
+    await Promise.all(data.sites.map(s => upsertSite(tx, s)));
+    await Promise.all(data.inventory.map(i => upsertInventoryItem(tx, i)));
+    await Promise.all(data.assignments.map(a => upsertAssignment(tx, a)));
+    await Promise.all(data.requests.map(r => upsertRequest(tx, r)));
+
+    // 2) Prune rows that are no longer present, deepest dependents first.
+    await tx.siteRequest.deleteMany({ where: { id: { notIn: data.requests.map(r => r.id) } } });
+    await tx.assignment.deleteMany({ where: { id: { notIn: data.assignments.map(a => a.id) } } });
+    await tx.inventoryItem.deleteMany({ where: { id: { notIn: data.inventory.map(i => i.id) } } });
+    await tx.site.deleteMany({ where: { id: { notIn: data.sites.map(s => s.id) } } });
+    await tx.user.deleteMany({ where: { id: { notIn: data.users.map(u => u.id) } } });
+  }, { timeout: 30_000 });
+}
+
+async function upsertUser(tx: Tx, u: UserAccount) {
+  const common = {
+    loginId: u.loginId,
+    password: u.password,
+    name: u.name,
+    role: ROLE_TO_DB[u.role],
+    status: u.status,
+    phone: u.phone,
+    email: u.email,
+    address: u.address,
+    notes: u.notes,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+    lastLogin: u.lastLogin ?? null,
+  };
+  await tx.user.upsert({ where: { id: u.id }, create: { id: u.id, ...common }, update: common });
+}
+
+async function upsertSite(tx: Tx, s: Site) {
+  const common = {
+    code: s.code,
+    name: s.name,
+    category: s.category,
+    latitude: s.latitude,
+    longitude: s.longitude,
+    supervisor: s.supervisor,
+    supervisorContact: s.supervisorContact,
+    workerCount: s.workerCount,
+    note: s.note,
+    foundById: s.foundById || null,
+    foundByName: s.foundByName,
+    reservedById: s.reservedById || null,
+    reservedByName: s.reservedByName,
+    status: SITE_STATUS_TO_DB[s.status],
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  };
+  await tx.site.upsert({ where: { id: s.id }, create: { id: s.id, ...common }, update: common });
+}
+
+async function upsertInventoryItem(tx: Tx, i: InventoryItem) {
+  const common = {
+    itemId: i.itemId,
+    name: i.name,
+    category: i.category,
+    quantity: i.quantity,
+    note: i.note,
+    createdAt: i.createdAt,
+    updatedAt: i.updatedAt,
+  };
+  await tx.inventoryItem.upsert({ where: { id: i.id }, create: { id: i.id, ...common }, update: common });
+
+  // Children are small arrays and cheap to fully replace rather than diff.
+  await tx.inventoryHolder.deleteMany({ where: { itemId: i.id } });
+  await tx.inventoryIssue.deleteMany({ where: { itemId: i.id } });
+  await tx.resolvedIssue.deleteMany({ where: { itemId: i.id } });
+  await tx.returnRecord.deleteMany({ where: { itemId: i.id } });
+
+  if (i.holders.length) {
+    await tx.inventoryHolder.createMany({
+      data: i.holders.map(h => ({ itemId: i.id, collectorId: h.collectorId, quantity: h.quantity })),
+    });
+  }
+  if (i.issues.length) {
+    await tx.inventoryIssue.createMany({
+      data: i.issues.map(x => ({
+        id: x.id, itemId: i.id, condition: x.condition, quantity: x.quantity, note: x.note,
+        reportedAt: x.reportedAt,
+        reportedByCollectorId: x.reportedByCollectorId || null,
+        reportedByCollectorName: x.reportedByCollectorName || null,
+      })),
+    });
+  }
+  if (i.resolvedIssues.length) {
+    await tx.resolvedIssue.createMany({
+      data: i.resolvedIssues.map(x => ({
+        id: x.id, itemId: i.id, condition: x.condition, quantity: x.quantity, note: x.note,
+        reportedAt: x.reportedAt,
+        reportedByCollectorId: x.reportedByCollectorId || null,
+        reportedByCollectorName: x.reportedByCollectorName || null,
+        outcome: x.outcome, resolvedAt: x.resolvedAt, resolvedByName: x.resolvedByName,
+      })),
+    });
+  }
+  if (i.returnLog.length) {
+    await tx.returnRecord.createMany({
+      data: i.returnLog.map(r => ({
+        itemId: i.id, date: r.date, ok: r.ok, note: r.note, byName: r.byName,
+        fromCollectorId: r.fromCollectorId, fromCollectorName: r.fromCollectorName, quantity: r.quantity,
+      })),
+    });
+  }
+}
+
+async function upsertAssignment(tx: Tx, a: Assignment) {
+  const common = {
+    siteId: a.siteId,
+    siteName: a.siteName,
+    collectorId: a.collectorId,
+    collectorName: a.collectorName,
+    assignedById: a.assignedById,
+    assignedByName: a.assignedByName,
+    status: ASSIGNMENT_STATUS_TO_DB[a.status],
+    hoursLogged: a.hoursLogged,
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+  };
+  await tx.assignment.upsert({ where: { id: a.id }, create: { id: a.id, ...common }, update: common });
+
+  await tx.collectionSession.deleteMany({ where: { assignmentId: a.id } });
+  if (a.sessions.length) {
+    await tx.collectionSession.createMany({
+      data: a.sessions.map(s => ({
+        id: s.id, assignmentId: a.id, date: s.date, hours: s.hours,
+        actualHours: s.actualHours ?? null,
+        verifiedByName: s.verifiedByName ?? null,
+        verifiedAt: s.verifiedAt ?? null,
+        note: s.note ?? null,
+        cameraId: s.cameraId ?? null,
+        cameraName: s.cameraName ?? null,
+        cameraItemId: s.cameraItemId ?? null,
+        task: s.task ?? null,
+      })),
+    });
+  }
+}
+
+async function upsertRequest(tx: Tx, r: SiteRequest) {
+  const common = {
+    siteId: r.siteId,
+    siteName: r.siteName,
+    collectorId: r.collectorId,
+    collectorName: r.collectorName,
+    status: REQUEST_STATUS_TO_DB[r.status],
+    requestedAt: r.requestedAt,
+    decidedAt: r.decidedAt ?? null,
+    updatedAt: r.updatedAt,
+  };
+  await tx.siteRequest.upsert({ where: { id: r.id }, create: { id: r.id, ...common }, update: common });
+}
+
+export { fillHolderNames };

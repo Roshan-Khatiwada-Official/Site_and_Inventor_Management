@@ -1,16 +1,43 @@
 # Site &amp; Inventory Manager
 
+## Repo layout
+
+This is a monorepo with the frontend and backend as separate apps:
+
+```
+frontend/   React + Vite SPA (the UI) — deployed to GitHub Pages
+backend/    Node + Express + Prisma API, backed by PostgreSQL — the new backend
+backend-legacy-apps-script/
+            The OLD backend: a Google Apps Script bridge to a Google Sheet.
+            Kept for reference / rollback during the Postgres migration —
+            not used once the frontend points at backend/.
+backups/    Timestamped full-database JSON snapshots (gitignored)
+```
+
 ## Run locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js, PostgreSQL running locally (or point `DATABASE_URL` at
+any Postgres instance).
 
-1. Install dependencies:
-   `npm install`
-2. Run the app:
-   `npm run dev`
+**Backend:**
+```
+cd backend
+cp .env.example .env        # edit DATABASE_URL if needed
+npm install
+npx prisma migrate dev      # creates the schema
+npm run dev                 # http://localhost:4000
+```
 
-The app is served at `http://localhost:3000` and on your local network at
-`http://<your-computer-ip>:3000` (other devices on the same Wi‑Fi can open it).
+**Frontend:**
+```
+cd frontend
+npm install
+npm run dev                 # http://localhost:3000
+```
+
+The frontend currently talks to the legacy Google Sheets bridge
+(`frontend/src/services/sheetsBridge.ts`) — pointing it at the new backend
+instead is the next step of the migration (see `backend/README` once added).
 
 Live (GitHub Pages): **https://roshan-khatiwada-official.github.io/Site_and_Inventor_Management/**
 
@@ -21,7 +48,8 @@ Live (GitHub Pages): **https://roshan-khatiwada-official.github.io/Site_and_Inve
 A small field-operations app. **Site Finders** add field sites, **Data Collectors**
 request sites and log how many hours of data they collect, and the **Admin** manages
 the inventory, assigns collectors to sites (with inventory items), approves requests,
-and reads the reports. All data is stored in **one shared Google Sheet**.
+and reads the reports. Data is moving from a shared Google Sheet to a dedicated
+PostgreSQL database (see **Repo layout** above).
 
 ## Roles
 

@@ -1,0 +1,246 @@
+// Site & Inventory Manager — PostgreSQL schema
+//
+// Mirrors the data model the frontend already knows (frontend/src/types.ts)
+// as closely as possible, so the API layer can serialize rows back into the
+// exact same shapes the app already renders. IDs are kept as plain strings
+// (not re-generated) so imported historical rows keep their original ids.
+// "Denormalised" name fields (e.g. siteName on an Assignment, byName on a
+// ReturnRecord) are kept as plain columns rather than pure joins — they're
+// deliberately a snapshot of the name at the time, which matters for
+// history (a renamed/deleted user shouldn't rewrite old records).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  Admin
+  SiteFinder    @map("Site Finder")
+  DataCollector @map("Data Collector")
+  FieldWorker   @map("Field Worker")
+}
+
+enum UserStatus {
+  Active
+  Suspended
+}
+
+enum SiteStatus {
+  PendingApproval @map("Pending Approval")
+  Available
+}
+
+enum AssignmentStatus {
+  Active
+  Completed
+}
+
+enum RequestStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+enum IssueCondition {
+  Flagged
+  Damaged
+  Lost
+}
+
+enum IssueOutcome {
+  Cleared
+  Damaged
+  Lost
+}
+
+model User {
+  id        String     @id
+  loginId   String     @unique
+  password  String
+  name      String
+  role      UserRole
+  status    UserStatus @default(Active)
+  phone     String     @default("")
+  email     String     @default("")
+  address   String     @default("")
+  notes     String     @default("")
+  createdAt String
+  updatedAt String
+  lastLogin String?
+
+  foundSites        Site[]       @relation("SiteFoundBy")
+  reservedSites      Site[]       @relation("SiteReservedBy")
+  collectorAssignments Assignment[] @relation("AssignmentCollector")
+  assignedByAssignments Assignment[] @relation("AssignmentAssignedBy")
+  requests          SiteRequest[] @relation("RequestCollector")
+  holders           InventoryHolder[]
+
+  @@map("users")
+}
+
+model Site {
+  id                 String     @id
+  code               String
+  name               String
+  category           String     @default("")
+  latitude           Float      @default(0)
+  longitude          Float      @default(0)
+  supervisor         String     @default("")
+  supervisorContact  String     @default("")
+  workerCount        Int        @default(0)
+  note               String     @default("")
+  foundById          String?
+  foundBy            User?      @relation("SiteFoundBy", fields: [foundById], references: [id], onDelete: SetNull)
+  foundByName        String     @default("")
+  reservedById       String?
+  reservedBy         User?      @relation("SiteReservedBy", fields: [reservedById], references: [id], onDelete: SetNull)
+  reservedByName     String     @default("")
+  status             SiteStatus @default(Available)
+  createdAt          String
+  updatedAt          String
+
+  assignments Assignment[]
+  requests    SiteRequest[]
+
+  @@map("sites")
+}
+
+model InventoryItem {
+  id       String @id
+  itemId   String
+  name     String
+  category String @default("")
+  quantity Int    @default(0)
+  note     String @default("")
+  createdAt String
+  updatedAt String
+
+  holders        InventoryHolder[]
+  issues         InventoryIssue[]
+  resolvedIssues ResolvedIssue[]
+  returnLog      ReturnRecord[]
+
+  @@map("inventory_items")
+}
+
+// A field worker currently holding some of one item's stock.
+model InventoryHolder {
+  id          String        @id @default(cuid())
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId      String
+  collector   User          @relation(fields: [collectorId], references: [id], onDelete: Cascade)
+  collectorId String
+  quantity    Int
+
+  @@unique([itemId, collectorId])
+  @@map("inventory_holders")
+}
+
+// Units currently flagged / damaged / lost — unresolved.
+model InventoryIssue {
+  id                     String         @id @default(cuid())
+  item                   InventoryItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId                 String
+  condition              IssueCondition
+  quantity               Int
+  note                   String         @default("")
+  reportedAt             String
+  reportedByCollectorId  String?
+  reportedByCollectorName String?
+
+  @@map("inventory_issues")
+}
+
+// History of issues that were cleared or reclassified.
+model ResolvedIssue {
+  id                      String         @id @default(cuid())
+  item                    InventoryItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId                  String
+  condition               IssueCondition
+  quantity                Int
+  note                    String         @default("")
+  reportedAt              String
+  reportedByCollectorId   String?
+  reportedByCollectorName String?
+  outcome                 IssueOutcome
+  resolvedAt              String
+  resolvedByName          String
+
+  @@map("resolved_issues")
+}
+
+// Check-in history for an item.
+model ReturnRecord {
+  id                 String        @id @default(cuid())
+  item               InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId             String
+  date               String
+  ok                 Boolean
+  note               String        @default("")
+  byName             String
+  fromCollectorId    String        @default("")
+  fromCollectorName  String        @default("")
+  quantity           Int
+
+  @@map("return_records")
+}
+
+model Assignment {
+  id             String           @id
+  site           Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  siteId         String
+  siteName       String           @default("")
+  collector      User             @relation("AssignmentCollector", fields: [collectorId], references: [id], onDelete: Cascade)
+  collectorId    String
+  collectorName  String           @default("")
+  assignedById   String
+  assignedBy     User?            @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignedByName String           @default("")
+  status         AssignmentStatus @default(Active)
+  hoursLogged    Float            @default(0)
+  createdAt      String
+  updatedAt      String
+
+  sessions CollectionSession[]
+
+  @@map("assignments")
+}
+
+model CollectionSession {
+  id            String     @id
+  assignment    Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId  String
+  date          String
+  hours         Float
+  actualHours   Float?
+  verifiedByName String?
+  verifiedAt    String?
+  note          String?
+  cameraId      String?
+  cameraName    String?
+  cameraItemId  String?
+  task          String?
+
+  @@map("collection_sessions")
+}
+
+model SiteRequest {
+  id            String        @id
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  siteId        String
+  siteName      String        @default("")
+  collector     User          @relation("RequestCollector", fields: [collectorId], references: [id], onDelete: Cascade)
+  collectorId   String
+  collectorName String        @default("")
+  status        RequestStatus @default(Pending)
+  requestedAt   String
+  decidedAt     String?
+  updatedAt     String
+
+  @@map("site_requests")
+}
